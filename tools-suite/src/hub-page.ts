@@ -942,7 +942,7 @@ function applyLang() {
   }
   if (guideOpenFlag && q('#modalBg').classList.contains('on')) guideRender();
 }
-q('#langSel').addEventListener('change', function () {
+var _langSel = q('#langSel'); if (_langSel) _langSel.addEventListener('change', function () {
   lang = this.value; localStorage.setItem('toolsLang', lang); _applyLangSafe ? _applyLangSafe() : applyLang();
   try { fetch('/tools/api/ui-lang', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ lang: lang }) }) } catch (e) { /* offline ok */ }
 });
@@ -950,8 +950,18 @@ function api(path, opts, cb) {
   opts = opts || {};
   opts.headers = opts.headers || {};
   if (opts.body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(opts.body); }
-  fetch(path, opts).then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
-    .then(function (x) { if (cb) cb(null, x); }, function (e) { if (cb) cb(e); });
+  fetch(path, opts).then(function (r) {
+    return r.text().then(function (tx) {
+      var j = null;
+      try { j = JSON.parse(tx); } catch (eP) { j = null; }
+      if (j === null || typeof j !== 'object') {
+        var snip = tx ? String(tx).slice(0, 140) : 'جسم فارغ';
+        return { s: r.status, j: { error: 'رد غير JSON من الخادم (HTTP ' + r.status + ') — ' + snip } };
+      }
+      return { s: r.status, j: j };
+    });
+  })
+    .then(function (x) { if (cb) cb(null, x); }, function (e) { if (cb) cb(new Error('تعذر الاتصال بالخادم — تحقق أنه يعمل (' + String((e && e.message) || e) + ')')); });
 }
 function toast(msg, isErr) {
   var t = document.getElementById('toast');
@@ -959,7 +969,11 @@ function toast(msg, isErr) {
   t.style.borderColor = isErr ? 'var(--dsw-alias-state-error-primary)' : 'var(--dsw-alias-border-l2)';
   setTimeout(function () { t.style.display = 'none'; }, 3200);
 }
-function q(sel) { return document.querySelector(sel); }
+function q(sel) {
+  var el = document.querySelector(sel);
+  if (el === null && typeof console !== 'undefined') console.warn('[hub] missing element:', sel);
+  return el;
+}
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function fmtBytes(n) { if (n > 1048576) return (n / 1048576).toFixed(1) + ' MB'; if (n > 1024) return (n / 1024).toFixed(1) + ' KB'; return n + ' B'; }
 
@@ -1005,14 +1019,20 @@ document.querySelectorAll('#tabs .sb-item').forEach(function (b) {
   });
 });
 
+var healthFailTold = false;
 function loadHealth() {
   api('/tools/api/health', null, function (e, x) {
-    if (e || x.s !== 200) { toast('فشل جلب الصحة', true); return; }
+    if (e || x.s !== 200) {
+      if (!healthFailTold) { toast('تعذر جلب مؤشرات الصحة — سنعيد المحاولة تلقائياً', true); healthFailTold = true; }
+      q('#healthCards').textContent = 'بانتظار استعادة الخادم...';
+      return;
+    }
+    healthFailTold = false;
     var h = x.j; var items = [
       ['وقت التشغيل', Math.floor(h.uptime_sec / 3600) + 'س ' + Math.floor((h.uptime_sec % 3600) / 60) + 'د'],
       ['الذاكرة (RSS)', h.rss_mb + ' MB'],
       ['الكومة', h.heap_used_mb + ' MB'],
-      ['ذاكرة النظام الحرة', h.free_mem_mb + ' GB'.replace(' GB', '') + ' / ' + Math.round(h.total_mem_mb / 1024) + ' GB'],
+      ['ذاكرة النظام الحرة', Math.round(h.free_mem_mb / 1024) + ' GB / ' + Math.round(h.total_mem_mb / 1024) + ' GB'],
       ['الأنوية', h.cpus], ['مساحات العمل', h.workspaces],
       ['وكلاء يعملون', h.auto_agents_running], ['Node', h.node]
     ];
@@ -1230,7 +1250,7 @@ q('#tSend').addEventListener('click', function () {
   fetch(url2, opts).then(function (r) {
     return r.text().then(function (txt) {
       q('#tMeta').textContent = 'HTTP ' + r.status + ' · ' + (Date.now() - t0) + 'ms · ' + (r.headers.get('content-type') || '');
-      var out = txt; try { out = JSON.stringify(JSON.parse(txt), null, 2); } catch (e3) { }
+      var out = txt; try { out = JSON.stringify(JSON.parse(txt), null, 2); } catch (e3) { /* ليس JSON — اعرض النص الخام كما هو */ }
       q('#tOut').textContent = out;
     });
   }).catch(function (e4) { q('#tMeta').textContent = 'خطأ'; q('#tOut').textContent = String(e4); });
@@ -1437,7 +1457,7 @@ q('#researchBtn').addEventListener('mouseleave', function (e) {
   if (e.relatedTarget === null || (e.relatedTarget && e.relatedTarget.id !== 'researchHover' && !h.contains(e.relatedTarget))) h.style.display = 'none'
 })
 q('#researchHover').addEventListener('mouseleave', function () { q('#researchHover').style.display = 'none' })
-setInterval(function () { if (q('#rsStatus').textContent === 'يعمل الآن…') rsLoad() }, 10000)
+setInterval(function () { if (document.hidden) return; if (q('#rsStatus').textContent === 'يعمل الآن…') rsLoad() }, 10000)
 var gdToastSeen = {};
 function gdNotifyNew(state) {
   if (!state || !state.proposals) return;
@@ -1530,14 +1550,14 @@ q('#gdmSel').addEventListener('change', function () {
 });
 gdmLoad();
 
-q('#gdSave').addEventListener('click', function () {
+var _gdSave = q('#gdSave'); if (_gdSave) _gdSave.addEventListener('click', function () {
   api('/tools/api/guardian', { method: 'POST', body: { enabled: q('#gdEnabled').checked, intervalMin: Number(q('#gdInterval').value) } }, function (e, x) {
     if (e || x.s !== 200) { toast('فشل الحفظ', true); return }
     toast('حُفظت إعدادات وكيل الصيانة ✓')
     gdRender(x.j.state)
   })
 })
-q('#gdScan').addEventListener('click', function () {
+var _gdScan = q('#gdScan'); if (_gdScan) _gdScan.addEventListener('click', function () {
   api('/tools/api/guardian', { method: 'POST', body: { action: 'scan-now' } }, function (e, x) {
     if (e || x.s !== 200) { toast('فشل الفحص', true); return }
     gdRender(x.j.state)
@@ -1556,7 +1576,7 @@ q('#guardianBtn').addEventListener('mouseleave', function (e) {
   if (e.relatedTarget === null || (e.relatedTarget && e.relatedTarget.id !== 'guardianHover' && !h.contains(e.relatedTarget))) h.style.display = 'none'
 })
 q('#guardianHover').addEventListener('mouseleave', function () { q('#guardianHover').style.display = 'none' })
-setInterval(loadGuardian, 30000)
+setInterval(function () { if (!document.hidden) loadGuardian(); }, 30000)
 function loadImgGen() {
   api('/tools/api/imggen/settings', null, function (e, x) {
     if (e || x.s !== 200) return
@@ -1792,7 +1812,7 @@ q('#acSave').addEventListener('click', function () {
 q('#acCancel').addEventListener('click', function () {
   api('/tools/api/auto-continue?ws=' + encodeURIComponent(ws), { method: 'POST', body: { action: 'cancel' } }, function () { acRender(); });
 });
-setInterval(acRender, 5000);
+setInterval(function () { if (!document.hidden) acRender(); }, 5000);
 
 /* ---- generated images gallery ---- */
 function loadGenImages() {
@@ -1910,7 +1930,7 @@ function engineDownload(engine) {
 }
 q('#blenderDl').addEventListener('click', function () { engineDownload('blender') });
 q('#godotDl').addEventListener('click', function () { engineDownload('godot') });
-setInterval(loadEngines, 30000);
+setInterval(function () { if (!document.hidden) loadEngines(); }, 30000);
 
 q('#openProjBtn').addEventListener('click', function () {
   var p = prompt('مسار مجلد المشروع (كامل):', '');
@@ -2083,7 +2103,14 @@ function guideRender() {
 }
 q('#guideOpen').addEventListener('click', function () { guideOpenFlag = true; guideRender(); });
 
-fillWs(); refreshAll(); applyLang(); acRender(); loadGenImages(); loadCap(); loadEngines(); loadAssets();
+try { fillWs(); } catch(e) { console.warn('fillWs', e); }
+try { refreshAll(); } catch(e) { console.warn('refreshAll', e); }
+try { applyLang(); } catch(e) { console.warn('applyLang', e); }
+try { acRender(); } catch(e) { console.warn('acRender', e); }
+try { loadGenImages(); } catch(e) { console.warn('loadGenImages', e); }
+try { loadCap(); } catch(e) { console.warn('loadCap', e); }
+try { loadEngines(); } catch(e) { console.warn('loadEngines', e); }
+try { loadAssets(); } catch(e) { console.warn('loadAssets', e); }
 var _langBusy = false;
 var _langTimer = null;
 var _applyLangSafe = function () {
@@ -2091,12 +2118,22 @@ var _applyLangSafe = function () {
   _langBusy = true;
   try { applyLang(); } finally { _langBusy = false; }
 };
-new MutationObserver(function () {
+new MutationObserver(function (muts) {
   if (lang === 'ar' || _langBusy) return;
+  var touched = false;
+  for (var mi = 0; mi < muts.length; mi++) {
+    var add = muts[mi].addedNodes;
+    for (var mk = 0; mk < add.length; mk++) {
+      var mn = add[mk];
+      if (mn.nodeType !== 1) continue; // تجاهل عقد النص: تحديثات المؤشرات لا تستدعي إعادة الترجمة
+      touched = true;
+    }
+  }
+  if (!touched) return; // لا مسح كامل للصفحة عند تحديثات نصية دورية (أداء)
   clearTimeout(_langTimer);
   _langTimer = setTimeout(function () { if (lang !== 'ar' && !_langBusy) _applyLangSafe(); }, 250);
 }).observe(document.body, { childList: true, subtree: true });
-setInterval(loadHealth, 15000);
+setInterval(function () { if (!document.hidden) loadHealth(); }, 15000);
 </script>
 </body>
 </html>`
