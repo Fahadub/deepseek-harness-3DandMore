@@ -308,35 +308,32 @@ const INJECTED_SNIPPET = `
 
 
   function openSettingsAnywhere() {
-    // ابحث عن زر الإعدادات في الواجهة الرئيسة بأي لغة
-    var all = [].slice.call(document.querySelectorAll('button, [role="button"], a, [class*="settings"], [class*="gear"], [class*="cog"], [data-testid*="settings"]'));
-    var btn = all.find(function (el) {
+    // 1) زر إعدادات حقيقي: BUTTON نصه يحوي settings/إعدادات/设置
+    var btns = [].slice.call(document.querySelectorAll('button, [role="button"]')).filter(function (el) {
       if (el.offsetParent === null) return false;
+      var txt = (el.textContent || '').trim().toLowerCase();
       var aria = (el.getAttribute('aria-label') || '').toLowerCase();
       var title = (el.getAttribute('title') || '').toLowerCase();
-      var txt = (el.textContent || '').trim().toLowerCase();
-      var cls = (el.className || '').toString().toLowerCase();
-      return aria.includes('settings') || title.includes('settings') ||
-             aria.includes('إعدادات') || title.includes('إعدادات') ||
-             aria.includes('设置') || title.includes('设置') ||
-             (/^\s*(settings|إعدادات|设置)\s*$/i.test(txt)) ||
-             (cls.includes('settings') && el.tagName === 'BUTTON');
+      return txt === 'settings' || aria.includes('settings') || title.includes('settings') ||
+             txt.includes('إعدادات') || txt.includes('设置');
     });
-    if (btn) { btn.click(); return; }
-    // إن لم يُوجد: اعرض رسالة واضحة — لا تفتح المركز
-    var chips = document.getElementById('tools-dock');
-    if (chips) {
-      var note = document.getElementById('tools-settings-note');
-      if (!note) {
-        note = document.createElement('span');
-        note.id = 'tools-settings-note';
-        note.style.cssText = 'position:fixed;bottom:64px;left:18px;direction:rtl;padding:10px 14px;border-radius:12px;font-size:13px;background:var(--dsw-alias-bg-layer-1,rgb(35,35,36));color:var(--dsw-alias-label-secondary,rgb(207,211,214));border:1px solid var(--dsw-alias-border-l2,rgba(255,255,255,.12));z-index:9992;max-width:320px';
-        document.body.appendChild(note);
-      }
-      note.textContent = 'إعدادات التطبيق في الشريط الجانبي — افتح القائمة (≡) أولا';
-      note.style.display = 'block';
-      setTimeout(function() { note.style.display = 'none'; }, 3500);
+    if (btns.length > 0) { btns[0].click(); return; }
+    // 2) أي عنتر نصه settings داخل class settings
+    var areas = [].slice.call(document.querySelectorAll('[class*="settings"]')).filter(function (el) {
+      return el.offsetParent !== null && el.tagName === 'BUTTON';
+    });
+    if (areas.length > 0) { areas[0].click(); return; }
+    // 3) لم يجد: رسالة إرشادية
+    var note = document.getElementById('tools-settings-note');
+    if (!note) {
+      note = document.createElement('span');
+      note.id = 'tools-settings-note';
+      note.style.cssText = 'position:fixed;bottom:64px;left:18px;direction:rtl;padding:10px 14px;border-radius:12px;font-size:13px;background:rgb(35,35,36);color:rgb(207,211,214);border:1px solid rgba(255,255,255,.12);z-index:9992;max-width:320px';
+      document.body.appendChild(note);
     }
+    note.textContent = 'إعدادات التطبيق في الشريط الجانبي في اسفل القائمة';
+    note.style.display = 'block';
+    setTimeout(function () { note.style.display = 'none'; }, 3500);
   }
 
   function boot() {
