@@ -308,16 +308,35 @@ const INJECTED_SNIPPET = `
 
 
   function openSettingsAnywhere() {
-    var sels = ['button[aria-label*="ettings" i]', 'button[title*="ettings" i]', '[role="button"][aria-label*="ettings" i]'];
-    var all = [].slice.call(document.querySelectorAll('button, [role="button"]'));
+    // ابحث عن زر الإعدادات في الواجهة الرئيسة بأي لغة
+    var all = [].slice.call(document.querySelectorAll('button, [role="button"], a, [class*="settings"], [class*="gear"], [class*="cog"], [data-testid*="settings"]'));
     var btn = all.find(function (el) {
-      var t = ((el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '') + ' ' + (el.textContent || '')).trim();
-      return /^(settings|إعدادات|设置)$/i.test(t.slice(0, 30)) && el.offsetParent !== null;
+      if (el.offsetParent === null) return false;
+      var aria = (el.getAttribute('aria-label') || '').toLowerCase();
+      var title = (el.getAttribute('title') || '').toLowerCase();
+      var txt = (el.textContent || '').trim().toLowerCase();
+      var cls = (el.className || '').toString().toLowerCase();
+      return aria.includes('settings') || title.includes('settings') ||
+             aria.includes('إعدادات') || title.includes('إعدادات') ||
+             aria.includes('设置') || title.includes('设置') ||
+             (/^\s*(settings|إعدادات|设置)\s*$/i.test(txt)) ||
+             (cls.includes('settings') && el.tagName === 'BUTTON');
     });
     if (btn) { btn.click(); return; }
-    openOverlay();
-    var f = document.getElementById('tools-frame');
-    if (f) { var tryGo = function (n) { try { f.contentWindow.document.querySelector('#guardianBtn')?.click(); } catch (e) { if (n > 0) setTimeout(function () { tryGo(n - 1); }, 700); } }; tryGo(4); }
+    // إن لم يُوجد: اعرض رسالة واضحة — لا تفتح المركز
+    var chips = document.getElementById('tools-dock');
+    if (chips) {
+      var note = document.getElementById('tools-settings-note');
+      if (!note) {
+        note = document.createElement('span');
+        note.id = 'tools-settings-note';
+        note.style.cssText = 'position:fixed;bottom:64px;left:18px;direction:rtl;padding:10px 14px;border-radius:12px;font-size:13px;background:var(--dsw-alias-bg-layer-1,rgb(35,35,36));color:var(--dsw-alias-label-secondary,rgb(207,211,214));border:1px solid var(--dsw-alias-border-l2,rgba(255,255,255,.12));z-index:9992;max-width:320px';
+        document.body.appendChild(note);
+      }
+      note.textContent = 'إعدادات التطبيق في الشريط الجانبي — افتح القائمة (≡) أولا';
+      note.style.display = 'block';
+      setTimeout(function() { note.style.display = 'none'; }, 3500);
+    }
   }
 
   function boot() {

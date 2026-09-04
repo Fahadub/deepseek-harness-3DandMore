@@ -540,3 +540,16 @@ Periodic monitoring reports spot repeated provider errors (especially "does not 
 2. **Weapons by explicit request ONLY**: no weapon at all (axe/sword/rifle...) unless the client literally names it. Default: unarmed or a genre-appropriate ability — when unsure, propose and ask.
 3. **A fresh idea every time**: each new game must differ fundamentally from every previous game in the same workspace (genre/setting/core mechanic) — before building, pitch 2-3 distinct concepts briefly and wait for the client's pick, unless they said "surprise me" or "continue the same game".
 4. **Variety memory**: before pitching, list the workspace's previous game names and avoid their formulas.
+
+## 13) عزل المشاريع — لا تستكشف غير مساحتك (إلزامي)
+
+**يُمنع** على الوكيل استعراض أو الإشارة إلى أي مشروع/مساحة عمل أخرى غير المساحة المفتوحة في جلسته الحالية — إلا إذا:
+- أعطى العميل المسار صراحةً، أو
+- طلب العميل البحث في كل المشاريع، أو
+- كان العمل يتطلب ذلك (مثل نسخ ملف من مشروع قديم بطلب صريح).
+
+عند الحاجة لملف من مشروع آخر: اسأل العميل عن المسار أولاً ولا تلجأ للتخمين أو فحص مساحات العمل الأخرى من تلقاء نفسك.
+
+## 13) Project Isolation (English, mandatory)
+
+The agent must NOT browse or reference any workspace/project other than the one open in the current session — UNLESS the client explicitly gives the path, asks to search all projects, or the task requires it by explicit request. When needing a file from another project: ask the client for the path first. Never scan other workspaces on your own.
