@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>محرر المشاهد ثلاثي الأبعاد</title>
+<style>
+  :root { --bg:#151517; --panel:#232324; --line:rgba(255,255,255,.12); --line2:rgba(255,255,255,.06);
+          --txt:#f9fafb; --txt2:#cfd3d6; --brand:#5686fe; }
+  * { box-sizing:border-box; margin:0; padding:0 }
+  body { background:var(--bg); color:var(--txt); font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+         height:100vh; display:flex; flex-direction:column; overflow:hidden }
+  header { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--line2) }
+  header h1 { font-size:15px; font-weight:600 }
+  header .sp { flex:1 }
+  select, button, input, .num { background:var(--panel); border:1px solid var(--line); color:var(--txt);
+    border-radius:8px; padding:6px 10px; font-size:13px; font-family:inherit; outline:none }
+  button { cursor:pointer } button:hover { border-color:var(--brand) }
+  button.primary { background:var(--brand); border-color:transparent; color:#0f1115; font-weight:600 }
+  #main { flex:1; display:flex; min-height:0 }
+  #side { width:300px; border-inline-start:1px solid var(--line2); overflow:auto; padding:12px; display:flex; flex-direction:column; gap:12px }
+  .sec { background:var(--panel); border:1px solid var(--line2); border-radius:12px; padding:10px }
+  .sec h3 { font-size:12px; color:var(--txt2); font-weight:600; margin-bottom:8px }
+  .list { max-height:180px; overflow:auto; display:flex; flex-direction:column; gap:4px }
+  .item { padding:6px 8px; border-radius:8px; border:1px solid transparent; cursor:pointer; font-size:13px; color:var(--txt2) }
+  .item:hover { background:rgba(255,255,255,.05) }
+  .item.on { border-color:var(--brand); color:var(--txt); background:rgba(86,134,254,.12) }
+  .row { display:flex; gap:6px; align-items:center; margin-bottom:6px; flex-wrap:wrap }
+  .row label { font-size:12px; color:var(--txt2); min-width:64px }
+  .num { width:74px; direction:ltr; text-align:center; font-family:Consolas,monospace; font-size:12px }
+  #view { flex:1; position:relative; min-width:0 }
+  canvas { display:block; width:100%; height:100% }
+  #hint { position:absolute; bottom:12px; inset-inline-start:12px; background:rgba(0,0,0,.55); color:var(--txt2);
+          border:1px solid var(--line2); border-radius:10px; padding:8px 12px; font-size:12px; pointer-events:none }
+  #toast { position:fixed; top:14px; inset-inline-start:50%; transform:translateX(50%); display:none; z-index:9;
+           background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px 16px; font-size:13px }
+  .modes { display:flex; gap:6px } .modes button { flex:1 }
+  .modes button.on { background:var(--brand); color:#0f1115; border-color:transparent }
+</style>
+</head>
+<body>
+<header>
+  <h1>محرر المشاهد ثلاثي الأبعاد</h1>
+  <select id="wsSel" style="min-width:200px"></select>
+  <button class="primary" id="loadBtn">فتح scene.json</button>
+  <button class="primary" id="saveBtn">حفظ</button>
+  <span class="sp"></span>
+  <span id="stat" style="font-size:12px;color:var(--txt2)"></span>
+</header>
+<div id="main">
+  <div id="view">
+    <div id="hint">انقر مجسمًا لتحديده · G إزاحة · R دوران · S تحجيم · Delete حذف · Ctrl+Z تراجع</div>
+  </div>
+  <div id="side">
+    <div class="sec"><h3>أوضاع التحرير</h3>
+      <div class="modes">
+        <button data-m="translate" class="on">إزاحة</button>
+        <button data-m="rotate">دوران</button>
+        <button data-m="scale">تحجيم</button>
+      </div>
+    </div>
+    <div class="sec"><h3>مجسمات المشروع (GLB)</h3>
+      <div class="list" id="assets"><div class="item" style="cursor:default;color:var(--txt2)">اختر مساحة عمل أولًا</div></div>
+      <div class="row" style="margin-top:8px"><button id="addBtn" style="flex:1">إضافة المحدد إلى المشهد</button></div>
+    </div>
+    <div class="sec"><h3>عناصر المشهد</h3>
+      <div class="list" id="objs"><div class="item" style="cursor:default;color:var(--txt2)">المشهد فارغ</div></div>
+      <div class="row" style="margin-top:8px">
+        <button id="dupBtn" style="flex:1">تكرار</button><button id="delBtn" style="flex:1">حذف</button>
+      </div>
+    </div>
+    <div class="sec" id="insp"><h3>الخصائص</h3>
+      <div class="row"><label>الاسم</label><input id="pName" style="flex:1" dir="auto"></div>
+      <div class="row"><label>الموضع</label><input class="num" id="px"><input class="num" id="py"><input class="num" id="pz"></div>
+      <div class="row"><label>الدوران Y</label><input class="num" id="ry" style="width:100%"></div>
+      <div class="row"><label>الحجم</label><input class="num" id="sx"><input class="num" id="sy"><input class="num" id="sz"></div>
+      <div class="row"><label>الحركة</label>
+        <select id="anim" style="flex:1">
+          <option value="">ساكن</option><option value="idle">خمول (تنفس)</option><option value="walk">مشي تمثيلي</option>
+          <option value="spin">دوران</option><option value="sway">تأرجح</option>
+        </select>
+        <input class="num" id="animSpd" value="1" title="السرعة">
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<script type="importmap">
+{ "imports": { "three": "../three.module.js", "three/addons/": "../" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from '../controls/OrbitControls.js';
+import { TransformControls } from '../controls/TransformControls.js';
+import { GLTFLoader } from '../loaders/GLTFLoader.js';
+
+const $ = (id) => document.getElementById(id);
+const qs = new URLSearchParams(location.search);
+let ws = qs.get('ws') || '';
+const api = (base, params) => base + new URLSearchParams(params).toString();
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 2600); }
+
+/* ===== مشهد ثلاثي الأبعاد ===== */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d0e12);
+scene.fog = new THREE.Fog(0x0d0e12, 60, 220);
+const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 1000);
+camera.position.set(14, 12, 18);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+$('view').appendChild(renderer.domElement);
+const orbit = new OrbitControls(camera, renderer.domElement);
+orbit.enableDamping = true; orbit.target.set(0, 1, 0);
+const grid = new THREE.GridHelper(120, 60, 0x2c2e33, 0x1c1e22); scene.add(grid);
+const hemi = new THREE.HemisphereLight(0x9db8ff, 0x14161a, 0.9); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+sun.position.set(20, 34, 14); sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024); sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
+sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60; scene.add(sun);
+
+const tc = new TransformControls(camera, renderer.domElement);
+tc.addEventListener('dragging-changed', (e) => { orbit.enabled = !e.value; });
+scene.add(tc);
+const ray = new THREE.Raycaster(); const mouse = new THREE.Vector2();
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  mouse.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(mouse, camera);
+  const hits = ray.intersectObjects(objRoots, true);
+  if (hits.length > 0) { let o = hits[0].object; while (o.parent != null && !o.userData.isSceneObj) o = o.parent; select(o.userData.isSceneObj ? o : null); }
+});
+
+/* ===== الحالة ===== */
+const objRoots = [];
+let selected = null;
+let undoStack = [];
+const loader = new GLTFLoader();
+let assetFiles = [];
+let sceneData = { meta: { title: 'مشهد', lang: 'ar' }, assets: {}, objects: [] };
+
+function pv(rel) { return '/tools/preview?' + new URLSearchParams({ ws, p: rel }).toString(); }
+function snapshot() { undoStack.push(JSON.stringify(sceneData.objects)); if (undoStack.length > 40) undoStack.shift(); }
+function undo() { if (undoStack.length === 0) { toast('لا تراجع بعد'); return; }
+  sceneData.objects = JSON.parse(undoStack.pop()); rebuild(); toast('تراجع ✓'); }
+
+async function addAsset(file, opts = {}) {
+  const name = (opts.name || file.split('/').pop().replace(/\.glb$/i, '')) + (objRoots.length ? ('#' + (objRoots.length + 1)) : '');
+  const gltf = await loader.loadAsync(pv(file));
+  const root = new THREE.Group(); root.userData = { isSceneObj: true, anim: { type: '', speed: 1 }, file, baseName: name };
+  root.add(gltf.scene);
+  gltf.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  root.position.fromArray(opts.pos || [0, 0, 0]);
+  root.rotation.y = opts.rotY || 0;
+  const sc = opts.scale || 1; root.scale.setScalar(sc);
+  scene.add(root); objRoots.push(root);
+  sceneData.assets[name.split('#')[0]] = { file };
+  sceneData.objects.push({ asset: name.split('#')[0], name, pos: root.position.toArray().map(v => +v.toFixed(2)), rotY: +(root.rotation.y.toFixed(3)), scale: sc, anim: { type: '', speed: 1 } });
+  renderObjs(); select(root); return root;
+}
+function select(o) {
+  if (selected != null) selected.traverse((c) => { if (c.material && c.userData._em != null) { c.material.emissive?.setHex(c.userData._em); } });
+  selected = o;
+  if (o == null) { tc.detach(); inspClear(); return; }
+  o.traverse((c) => { if (c.material && c.material.emissive != null) { c.userData._em = c.userData._em ?? c.material.emissive.getHex(); c.material.emissive.setHex(0x1b3f8f); } });
+  tc.attach(o); inspFill();
+}
+function delSel() { if (selected == null) return; snapshot();
+  const i = objRoots.indexOf(selected); objRoots.splice(i, 1); scene.remove(selected);
+  sceneData.objects.splice(i, 1); select(null); renderObjs(); toast('حُذف'); }
+function dupSel() { if (selected == null) return; snapshot();
+  const d = sceneData.objects[objRoots.indexOf(selected)];
+  addAsset(d.asset ? (sceneData.assets[d.asset].file) : selected.userData.file, { ...d, pos: [d.pos[0] + 2, d.pos[1], d.pos[2]] }); }
+
+function inspFill() { const d = sceneData.objects[objRoots.indexOf(selected)]; if (d == null) return;
+  $('pName').value = d.name; $('px').value = d.pos[0]; $('py').value = d.pos[1]; $('pz').value = d.pos[2];
+  $('ry').value = Math.round(d.rotY * 57.29); $('sx').value = $('sy').value = $('sz').value = d.scale;
+  $('anim').value = d.anim?.type || ''; $('animSpd').value = d.anim?.speed ?? 1; }
+function inspClear() { ['pName','px','py','pz','ry','sx','sy','sz'].forEach(i => $(i).value = ''); $('anim').value = ''; }
+function inspApply() { if (selected == null) return; const d = sceneData.objects[objRoots.indexOf(selected)]; if (d == null) return;
+  d.name = $('pName').value || d.name;
+  selected.position.set(+$('px').value || 0, +$('py').value || 0, +$('pz').value || 0);
+  selected.rotation.y = (+$('ry').value || 0) / 57.29;
+  selected.scale.set(+$('sx').value || 1, +$('sy').value || 1, +$('sz').value || 1);
+  d.pos = selected.position.toArray().map(v => +v.toFixed(2)); d.rotY = +selected.rotation.y.toFixed(3);
+  d.scale = +selected.scale.x.toFixed(3);
+  d.anim = { type: $('anim').value, speed: +$('animSpd').value || 1 };
+  selected.userData.anim = d.anim; renderObjs(); }
+['px','py','pz','ry','sx','sy','sz','anim','animSpd'].forEach(i => $(i).addEventListener('change', inspApply));
+
+function renderObjs() { const el = $('objs'); el.innerHTML = '';
+  if (objRoots.length === 0) { el.innerHTML = '<div class="item" style="cursor:default">المشهد فارغ</div>'; return; }
+  sceneData.objects.forEach((d, i) => { const it = document.createElement('div'); it.className = 'item' + (objRoots[i] === selected ? ' on' : '');
+    it.textContent = d.name; it.onclick = () => select(objRoots[i]); el.appendChild(it); });
+  $('stat').textContent = objRoots.length + ' عنصرًا'; }
+
+/* ===== الحفظ والفتح ===== */
+$('saveBtn').onclick = async () => {
+  if (ws === '') { toast('اختر مساحة عمل'); return; }
+  const r = await fetch('/tools/api/files/write?' + new URLSearchParams({ ws }), {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ p: 'scene.json', content: JSON.stringify(sceneData, null, 2) }) });
+  toast(r.ok ? 'حُفظ scene.json ✓ (مع لقطة إصدار تلقائية)' : 'فشل الحفظ'); };
+$('loadBtn').onclick = async () => {
+  if (ws === '') { toast('اختر مساحة عمل'); return; }
+  const r = await fetch('/tools/api/files/read?' + new URLSearchParams({ ws, p: 'scene.json' })).then(x => x.json());
+  if (r.text == null) { toast('لا يوجد scene.json — ستبدأ مشهدًا جديدًا'); return; }
+  sceneData = JSON.parse(r.text);
+  objRoots.splice(0).forEach(o => scene.remove(o)); select(null);
+  for (const d of sceneData.objects) await addAsset(sceneData.assets[d.asset]?.file ?? '', d);
+  toast('فُتح scene.json: ' + objRoots.length + ' عنصرًا'); };
+
+/* ===== الأصول ومساحات العمل ===== */
+async function loadWs() {
+  const list = await fetch('/tools/api/workspaces').then(x => x.json());
+  const sel = $('wsSel'); sel.innerHTML = '';
+  (list.workspaces || []).forEach(w => { const o = document.createElement('option'); o.value = w.path; o.textContent = w.title || w.path; sel.appendChild(o); });
+  if (ws !== '') sel.value = ws;
+  ws = sel.value; sel.onchange = () => { ws = sel.value; loadAssets(); };
+  loadAssets();
+}
+async function loadAssets() {
+  if (ws === '') return;
+  const t = await fetch('/tools/api/files/tree?' + new URLSearchParams({ ws })).then(x => x.json());
+  assetFiles = [];
+  (function walk(n) { (n.children || []).forEach(c => { if (c.type === 'dir') walk(c); else if (c.name.toLowerCase().endsWith('.glb')) assetFiles.push(c.path); }); })(t.tree || {});
+  const el = $('assets'); el.innerHTML = '';
+  if (assetFiles.length === 0) { el.innerHTML = '<div class="item" style="cursor:default">لا مجسمات GLB في المشروع</div>'; return; }
+  assetFiles.slice(0, 60).forEach(f => { const it = document.createElement('div'); it.className = 'item'; it.dataset.f = f;
+    it.textContent = f.split('/').pop().replace(/\.glb$/i, ''); it.onclick = () => { el.querySelectorAll('.item').forEach(x => x.classList.remove('on')); it.classList.add('on'); };
+    el.appendChild(it); });
+}
+$('addBtn').onclick = () => { const on = document.querySelector('#assets .item.on'); if (on == null) { toast('اختر مجسمًا من القائمة'); return; } snapshot(); addAsset(on.dataset.f); };
+
+/* ===== الأزرار والمفاتيح ===== */
+document.querySelectorAll('.modes button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.modes button').forEach(x => x.classList.remove('on')); b.classList.add('on'); tc.setMode(b.dataset.m); });
+addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'g') tc.setMode('translate'); if (e.key === 'r') tc.setMode('rotate'); if (e.key === 's') tc.setMode('scale');
+  if (e.key === 'Delete') delSel(); if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); } });
+$('delBtn').onclick = delSel; $('dupBtn').onclick = dupSel;
+tc.addEventListener('objectChange', () => { if (selected != null) inspFill(); });
+
+/* ===== حلقة الرسم + معاينة الحركات ===== */
+function resize() { const r = $('view').getBoundingClientRect(); camera.aspect = r.width / r.height; camera.updateProjectionMatrix(); renderer.setSize(r.width, r.height); }
+addEventListener('resize', resize); resize();
+const clock = new THREE.Clock();
+function animate() { requestAnimationFrame(animate);
+  const t = clock.getElapsedTime(); const dt = Math.min(clock.getDelta(), 0.05);
+  objRoots.forEach((o, i) => { const a = o.userData.anim || {}; const sp = a.speed || 1; const p = o.position;
+    if (a.type === 'idle') p.y = (sceneData.objects[i]?.pos?.[1] ?? 0) + Math.sin(t * 2 * sp) * 0.05;
+    else if (a.type === 'spin') o.rotation.y += dt * sp;
+    else if (a.type === 'sway') o.rotation.z = Math.sin(t * 1.2 * sp) * 0.06;
+    else if (a.type === 'walk') p.x = (sceneData.objects[i]?.pos?.[0] ?? 0) + Math.sin(t * 0.7 * sp) * 3; });
+  orbit.update(); renderer.render(scene, camera); }
+animate();
+loadWs();
+</script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+# DeepSeek Harness 3D v5 — runtime configuration TEMPLATE.
+# The launcher generates cordis-runtime.yml from this file, injecting this
+# checkout's absolute path (URL-encoded). Never publish cordis-runtime.yml.
+- id: webserver
+  config:
+    host: 127.0.0.1
+    port: 3060
+- insert:
+    - id: tool-memory
+      name: 'file:///{{ROOT}}/tools-suite/src/tool-memory.ts'
+    - id: tool-analysis
+      name: 'file:///{{ROOT}}/tools-suite/src/tool-analysis.ts'
+    - id: tool-parallel
+      name: 'file:///{{ROOT}}/tools-suite/src/tool-team.ts'
+    - id: tool-commands
+      name: 'file:///{{ROOT}}/tools-suite/src/tool-commands.ts'
+    - id: tool-versions
+      name: 'file:///{{ROOT}}/tools-suite/src/tool-versions.ts'
+    - id: tool-screenshot
+      name: 'file:///{{ROOT}}/tools-suite/src/tool-screenshot.ts'
+    - id: tool-todos-sync
+      name: 'file:///{{ROOT}}/tools-suite/src/tool-todos-sync.ts'
+    - id: tool-media
+      name: 'file:///{{ROOT}}/tools-suite/src/tool-media.ts'
+    - id: tool-blender
+      name: 'file:///{{ROOT}}/tools-suite/src/tool-blender.ts'
+    - id: tool-assets
+      name: 'file:///{{ROOT}}/tools-suite/src/tool-assets.ts'
+    - id: tool-tripo
+      name: 'file:///{{ROOT}}/tools-suite/src/tool-tripo.ts'
+    - id: tool-auto-continue
+      name: 'file:///{{ROOT}}/tools-suite/src/tool-auto-continue.ts'
+    - id: tool-playtest
+      name: 'file:///{{ROOT}}/tools-suite/src/tool-playtest.ts'
+    - id: tool-http
+      name: 'file:///{{ROOT}}/tools-suite/src/hub-server.ts'
+    - id: tool-ui-inject
+      name: 'file:///{{ROOT}}/tools-suite/src/ui-inject.ts'
+- id: tool-todo
+  disabled: false

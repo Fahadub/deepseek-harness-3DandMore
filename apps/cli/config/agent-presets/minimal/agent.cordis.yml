@@ -1,0 +1,62 @@
+# إعداد الوكيل «الوضع الأدنى» (minimal): تركيبة وكيل برمجة بموجه ثابت وأداتين فقط.
+#
+# الشخصية (persona) هي موجز النظام الكامل، لذا لا يمكن للهوية العامة أو التوجيه
+# للويب أو إرشاد الأدوات أو مستمعات التجميع اللاحقة إضافة نص إلى الموجه.
+# لقطات سياق وقت التشغيل معطّلة في هذا الإعداد، ولا يركّب النموذج سوى
+# `bash` الدائم و`str_replace_editor`. لا يوجد ضغط للسياق.
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: You are a helpful software engineer assistant.
+    complete: true
+    includeRuntimeContext: false
+
+# سجلّ PTY خدمة يملكها الوكيل، لذا يقيم في نطاق محلي بالمدخل. تستهلك
+# الواجهة الخلفية سياسة Sandbox الخاصة بالمضيف وتنفيذ العمليات الفرعية
+# كما هي، بينما تسجّل الأداة في فهرس هذا الوكيل المحدد.
+- id: persistent-shell
+  name: cordis:group
+  group: true
+  isolate:
+    terminals: true
+  config:
+    - id: pty
+      name: '@deepseek-ai/dsh-terminal'
+
+    - id: terminal-bash
+      name: '@deepseek-ai/dsh-terminal-bash'
+      config:
+        timeoutMs: 300000
+
+    - id: persistent-bash
+      name: '@deepseek-ai/dsh-tool-bash-persistent'
+      config:
+        timeoutMs: 300000
+        description: |-
+          Run commands in a bash shell
+          * When invoking this tool, the contents of the "command" parameter does NOT need to be XML-escaped.
+          * You don't have access to the internet via this tool.
+          * You do have access to a mirror of common linux and python packages via apt and pip.
+          * State is persistent across command calls and discussions with the user.
+          * To inspect a particular line range of a file, e.g. lines 10-25, try 'sed -n 10,25p /path/to/the/file'.
+          * Please avoid commands that may produce a very large amount of output.
+          * Please run long lived commands in the background, e.g. 'sleep 10 &' or start a server in the background.
+
+# نظام الملفات المحلي المجرد يحل محل مزود Sandbox الخاص بالمضيف في هذا
+# الإعداد فقط. المحرر يتشارك ذلك النطاق ويتطلب مسارات مطلقة.
+- id: filesystem
+  name: cordis:group
+  group: true
+  isolate:
+    fs: true
+  config:
+    - id: fs-local
+      name: '@deepseek-ai/dsh-fs-local'
+      config:
+        cwd: !!js process.env.DSH_CWD ?? process.cwd()
+
+    - id: str-replace-editor
+      name: '@deepseek-ai/dsh-tool-str-replace-editor'
+      config:
+        maxOutputChars: 16000
