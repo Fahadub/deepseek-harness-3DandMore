@@ -103,6 +103,7 @@ const INJECTED_SNIPPET = `
 <div id="tools-dock">
   <span class="tools-chip icon" id="tools-tts" role="button" title="استمع للرد — قراءة صوتية لآخر رد"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6.5 8.5H3.5v7h3L11 19z"/><path d="M15.5 8.8a4.5 4.5 0 0 1 0 6.4M18.2 6.2a8 8 0 0 1 0 11.6"/></svg></span>
   <span class="tools-chip icon" id="tools-assets" role="button" title="أصول 3D — نقرة واحدة تفعّل وصول الوكيل لكل الصور والمجسمات المحلية الجاهزة"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7 20.5 7v10L12 21.3 3.5 17V7z"/><path d="M3.5 7 12 11.6 20.5 7M12 11.6v9.7"/></svg><span class="dot"></span></span>
+  <span class="tools-chip icon" id="tools-settings-chip" role="button" title="Settings / الإعدادات / 设置 — opens the app settings (any language)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55h.09a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></svg></span>
   <span class="tools-chip icon" id="tools-build-chip" role="button" title="وضع البناء — اختر المحرك: three.js أو Godot أو مزجهما"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 0 0-6.4 0L3 11.6l3.2 3.2 5.3-5.3a4.5 4.5 0 0 0 3.2-3.2z"/><path d="m10 14-3.5 3.5a2.1 2.1 0 0 1-3-3L7 11"/><path d="M21 3l-4 1-6.5 6.5 3 3L20 7z"/></svg><span class="dot"></span></span>
   <span class="tools-chip icon" id="tools-hub" role="button" title="الأدوات — مركز مساحة العمل"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg></span>
 </div>
@@ -305,6 +306,20 @@ const INJECTED_SNIPPET = `
     }
   }
 
+
+  function openSettingsAnywhere() {
+    var sels = ['button[aria-label*="ettings" i]', 'button[title*="ettings" i]', '[role="button"][aria-label*="ettings" i]'];
+    var all = [].slice.call(document.querySelectorAll('button, [role="button"]'));
+    var btn = all.find(function (el) {
+      var t = ((el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '') + ' ' + (el.textContent || '')).trim();
+      return /^(settings|إعدادات|设置)$/i.test(t.slice(0, 30)) && el.offsetParent !== null;
+    });
+    if (btn) { btn.click(); return; }
+    openOverlay();
+    var f = document.getElementById('tools-frame');
+    if (f) { var tryGo = function (n) { try { f.contentWindow.document.querySelector('#guardianBtn')?.click(); } catch (e) { if (n > 0) setTimeout(function () { tryGo(n - 1); }, 700); } }; tryGo(4); }
+  }
+
   function boot() {
     function bind(id, fn) {
       var el = document.getElementById(id);
@@ -315,6 +330,7 @@ const INJECTED_SNIPPET = `
     bind('tools-tts', speakReader);
     bind('tools-assets', toggleAssets);
     bootBuildChip();
+    bind('tools-settings-chip', openSettingsAnywhere);
     var assetsChip = document.getElementById('tools-assets');
     if (assetsChip && !assetsChip.dataset.restored) {
       assetsChip.dataset.restored = '1';

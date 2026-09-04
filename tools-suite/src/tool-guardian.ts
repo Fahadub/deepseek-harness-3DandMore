@@ -49,9 +49,9 @@ const STATE_FILE = path.join(os.homedir(), '.dsh-tools', 'guardian.json')
 export async function loadGuardian(): Promise<GuardianState> {
   try {
     const raw = JSON.parse(await fs.readFile(STATE_FILE, 'utf8')) as Partial<GuardianState>
-    return { enabled: false, intervalMin: 15, proposals: [], log: [], ...raw }
+    return { enabled: true, intervalMin: 10, proposals: [], log: [], ...raw }
   } catch {
-    return { enabled: false, intervalMin: 15, proposals: [], log: [] }
+    return { enabled: true, intervalMin: 10, proposals: [], log: [] }
   }
 }
 
@@ -141,7 +141,7 @@ export async function detectProblems(workspaces: Array<{ path: string }>): Promi
         ? `بقبولك سيُرسل فوراً للوكيل داخل جلسته التوجيه الصحيح: «${hit.corrective.slice(0, 120)}…» — دون أي تعديل على ملفات`
         : 'بقبولك سيُرسل للوكيل توجيه بتصحيح المسار/المرجع داخل المحرر (المسار: ' + harnessRoot() + ') — التعديل نفسه ينفذه الوكيل بعد إذنك في الجلسة',
       requiresRestart: false, undoable: false, state: 'pending',
-      meta: { sessionId: hit.sessionId, corrective, fixKind, sample: hit.sample.slice(0, 300), ...metaExtra },
+      meta: { sessionId: hit.sessionId, corrective, fixKind, fingerprint: hit.fingerprint, sample: hit.sample.slice(0, 300), ...metaExtra },
     })
   }
   return out
@@ -168,6 +168,16 @@ const ERROR_PLAYBOOK: Array<{ pattern: RegExp, label: string, cause: string, fix
     pattern: /cannot read "([^"]*tools-suite[^"]*)": not found/i, label: 'ملف مطلوب داخل المحرر غير موجود', fixKind: 'harness',
     cause: 'مرجع داخل كتب/أكواد المحرر يشير لملف غير موجود',
     corrective: 'الملف المطلوب غير موجود في المحرر — تحقق من المسار تحت جذر المحرر، وإن كان مرجعاً ميتاً في كتاب قدرات فاقترح عليّ حذفه/تصحيحه ولا تتوقف.',
+  },
+  {
+    pattern: /tool call was interrupted[^\n]{10,200}|no result was durably recorded|outcome is unknown/i,
+    cause: 'استدعاء أداة انقطع بعد تسجيله دون نتيجة دائمة — عاقبه مجهول',
+    corrective: 'استدعاء الأداة الأخير انقطع بلا نتيجة مؤكدة: لا تعِد المحاولة تلقائياً — أعد فقط إذا كانت العملية قراءة صرفة أو آمنة التكرار؛ وإن كان لها أثر جانبي فتحقق من الحالة الخارجية أولاً أو اسألني.',
+  },
+  {
+    pattern: /(fetch failed|ECONNREFUSED|ETIMEDOUT|network error|timed out)[^\n]{0,120}/i,
+    cause: 'انقطاع شبكة أو تجاوز مهلة أثناء الاتصال بخدمة',
+    corrective: 'حدث فشل شبكة/مهلة — أعد المحاولة مرة واحدة بعد ثوانٍ، وإن تكرر فافحص اتصال الخدمة (المحركات/الإنترنت) وأعلمني قبل الإصرار.',
   },
   {
     pattern: /Error:.{10,180}/i,
@@ -212,13 +222,13 @@ async function findSessionErrors(): Promise<SessionErrorHit[]> {
           tail += (await decompressZstdFrame(buf.subarray(fr.start, fr.end))).toString('utf8') + '\n'
         }
       } catch { continue }
-      if (!/Error:|code run failed|TypeError|ToolCallError/i.test(tail)) continue
+      if (!/Error:|code run failed|TypeError|ToolCallError|interrupted|durably recorded|timed out|fetch failed|ECONNREFUSED/i.test(tail)) continue
       for (const rule of ERROR_PLAYBOOK) {
         const m = rule.pattern.exec(tail)
         if (m === null) continue
         const key = rule.label
         seen.set(key, (seen.get(key) ?? 0) + 1)
-        if ((seen.get(key) ?? 0) < 1) continue // نرقّي للمقترح فقط أول ظهور يكفي
+        if (out.some(pr => pr.kind === 'session-error' && pr.meta?.fingerprint === key && pr.state === 'pending')) continue // واحد معلق لكل نوع يكفي — وبعد حسمه يظهر الجديد // نرقّي للمقترح فقط أول ظهور يكفي
         hits.push({
           fingerprint: key.replace(/\s+/g, '-').slice(0, 40),
           label: rule.label, cause: rule.cause, fixKind: rule.fixKind, corrective: rule.corrective,

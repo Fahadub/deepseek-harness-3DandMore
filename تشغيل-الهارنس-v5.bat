@@ -41,7 +41,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "tools-suite\download-blende
 if errorlevel 1 echo [WARN] Blender download failed - you can retry later from the tools hub.
 
 :start
-echo [START] Stopping any previous server on port 3040...
+echo [START] Stopping any previous server on port 3060...
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":3060 .*LISTENING"') do taskkill /PID %%a /T /F >nul 2>&1
 timeout /t 2 /nobreak >nul
 

@@ -937,13 +937,13 @@ function applyLang() {
   };
   var active = document.querySelector('#tabs .sb-item.on');
   if (active && titles[active.dataset.t]) {
-    q('#pageTitle').textContent = titles[active.dataset.t][0];
-    q('#pageDesc').textContent = titles[active.dataset.t][1];
+    if (q('#pageTitle').textContent !== titles[active.dataset.t][0]) q('#pageTitle').textContent = titles[active.dataset.t][0];
+    if (q('#pageDesc').textContent !== titles[active.dataset.t][1]) q('#pageDesc').textContent = titles[active.dataset.t][1];
   }
   if (guideOpenFlag && q('#modalBg').classList.contains('on')) guideRender();
 }
 q('#langSel').addEventListener('change', function () {
-  lang = this.value; localStorage.setItem('toolsLang', lang); applyLang();
+  lang = this.value; localStorage.setItem('toolsLang', lang); _applyLangSafe ? _applyLangSafe() : applyLang();
   try { fetch('/tools/api/ui-lang', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ lang: lang }) }) } catch (e) { /* offline ok */ }
 });
 function api(path, opts, cb) {
@@ -1438,6 +1438,16 @@ q('#researchBtn').addEventListener('mouseleave', function (e) {
 })
 q('#researchHover').addEventListener('mouseleave', function () { q('#researchHover').style.display = 'none' })
 setInterval(function () { if (q('#rsStatus').textContent === 'يعمل الآن…') rsLoad() }, 10000)
+var gdToastSeen = {};
+function gdNotifyNew(state) {
+  if (!state || !state.proposals) return;
+  state.proposals.forEach(function (p) {
+    if (p.state === 'pending' && !gdToastSeen[p.id]) {
+      gdToastSeen[p.id] = true;
+      toast('إشعار الوصي: ' + (p.summary || '').slice(0, 90) + ' — القرار بيدك في لوحة وكيل الصيانة', p.severity === 'critical');
+    }
+  });
+}
 function loadGuardian() {
   api('/tools/api/guardian', null, function (e, x) {
     if (e || x.s !== 200) return
@@ -1673,6 +1683,25 @@ function refreshGlbList() {
   });
 }
 
+function glbDispose(root) {
+  root.traverse(function (o) {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      var ms = Array.isArray(o.material) ? o.material : [o.material];
+      ms.forEach(function (m) {
+        for (var k in m) { if (m[k] && m[k].isTexture) m[k].dispose(); }
+        m.dispose();
+      });
+    }
+  });
+}
+function glbClear() {
+  if (glbViewer && glbViewer.state && glbViewer.state.model) {
+    glbViewer.scene.remove(glbViewer.state.model);
+    glbDispose(glbViewer.state.model);
+    glbViewer.state.model = null;
+  }
+}
 var glbViewer = null;
 async function viewGlb(relPath) {
   var canvas = q('#glbCanvas');
@@ -1712,13 +1741,17 @@ async function viewGlb(relPath) {
       canvas.addEventListener('wheel', function (e) { e.preventDefault(); state.dist = Math.max(1, Math.min(15, state.dist + e.deltaY * 0.01)); }, { passive: false });
       glbViewer = { state: state, scene: scene, loader: new GLTF.GLTFLoader() };
     }
-    if (glbViewer.state.model) { glbViewer.scene.remove(glbViewer.state.model); glbViewer.state.model = null; }
+    glbViewer.state.loadSeq = (glbViewer.state.loadSeq || 0) + 1;
+    var mySeq = glbViewer.state.loadSeq;
+    glbClear();
     var url = '/tools/preview?ws=' + encodeURIComponent(ws) + '&p=' + encodeURIComponent(relPath);
     glbViewer.loader.load(url, function (gltf) {
+      if (mySeq !== glbViewer.state.loadSeq) { glbDispose(gltf.scene); return; }
+      glbClear();
       glbViewer.state.model = gltf.scene;
       glbViewer.scene.add(gltf.scene);
       toast('عُرض النموذج: ' + relPath);
-    }, undefined, function () { toast('تعذر تحميل النموذج', true); });
+    }, undefined, function () { if (mySeq === glbViewer.state.loadSeq) toast('تعذر تحميل النموذج', true); });
   } catch (err) {
     toast('تعذر تحميل مكتبة العرض — أعد المحاولة', true);
   }
@@ -2051,7 +2084,18 @@ function guideRender() {
 q('#guideOpen').addEventListener('click', function () { guideOpenFlag = true; guideRender(); });
 
 fillWs(); refreshAll(); applyLang(); acRender(); loadGenImages(); loadCap(); loadEngines(); loadAssets();
-new MutationObserver(function () { if (lang !== 'ar') applyLang(); }).observe(document.body, { childList: true, subtree: true });
+var _langBusy = false;
+var _langTimer = null;
+var _applyLangSafe = function () {
+  if (_langBusy) return;
+  _langBusy = true;
+  try { applyLang(); } finally { _langBusy = false; }
+};
+new MutationObserver(function () {
+  if (lang === 'ar' || _langBusy) return;
+  clearTimeout(_langTimer);
+  _langTimer = setTimeout(function () { if (lang !== 'ar' && !_langBusy) _applyLangSafe(); }, 250);
+}).observe(document.body, { childList: true, subtree: true });
 setInterval(loadHealth, 15000);
 </script>
 </body>
