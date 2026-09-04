@@ -210,3 +210,17 @@ func _input(event):                 # instantaneous events (keys/touch)
 2. **Realistic weapon carry**: every weapon has two poses — (a) holstered on back/belt at a natural angle while walking, (b) correct hand grip only when drawn/combat. NEVER let a weapon clip through the body — tune grip position+rotation per weapon and visually verify from all angles.
 3. **No wings, no flight**: flight is only enabled when the character actually wears built/attached wings with flap animation; otherwise there is no flight at all.
 4. **Natural environment**: scatter foliage/rocks with randomized rotation/scale/offset jitter — no rows or uniform angles; density varies naturally (denser near water, sparser on rock).
+
+## 12) قانون التنوع والإبداع — ممنوع تكرار نفس اللعبة (إلزامي)
+
+1. **دوران الشخصيات**: قبل البناء، جرد كل الشخصيات المجهزة (rigged) في local_assets — **يُمنع استخدام بطل اللعبة السابقة مرة أخرى**؛ اختر بطلاً مختلفاً يناسب الاتجاه الفني واذكر لماذا اخترته. (سيزارمان ليس البطل الوحيد في المكتبة!)
+2. **السلاح بطلب صريح فقط**: لا سلاح إطلاقاً (فأس/سيف/بندقية...) ما لم يسمّيه العميل في طلبه حرفياً. الافتراضي: بلا سلاح أو قدرة نوعية تناسب النوع — وعند الشك اقترح واسأل.
+3. **فكرة جديدة كل مرة**: كل لعبة جديدة يجب أن تختلف جوهرياً عن كل الألعاب السابقة في نفس مساحة العمل (النوع/البيئة/الميكانيكا الأساسية) — قبل البناء اعرض على العميل 2-3 مفاهيم متمايزة باختصار وانتظر اختياره، إلا إن قال «فاجئني» أو «أكمل نفس اللعبة».
+4. **ذاكرة التنوع**: قبل الت pitches اقرأ أسماء الألعاب السابقة في مساحة العمل وتجنب صيغتها.
+
+## 12) Variety & Originality Law (English, mandatory)
+
+1. **Hero rotation**: inventory ALL rigged characters in local_assets first — NEVER reuse the previous game's hero; pick a different one fitting the art direction and say why. (CesiumMan is not the only hero in the library!)
+2. **Weapons by explicit request ONLY**: no weapon at all (axe/sword/rifle...) unless the client literally names it. Default: unarmed or a genre-appropriate ability — when unsure, propose and ask.
+3. **A fresh idea every time**: each new game must differ fundamentally from every previous game in the same workspace (genre/setting/core mechanic) — before building, pitch 2-3 distinct concepts briefly and wait for the client's pick, unless they said "surprise me" or "continue the same game".
+4. **Variety memory**: before pitching, list the workspace's previous game names and avoid their formulas.
