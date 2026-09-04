@@ -454,6 +454,13 @@ export function apply(ctx: Context): void {
         sendText(res, 200, data, 'text/markdown; charset=utf-8')
         return
       }
+      // Patch: a relative import inside three-vendor addons resolves to /tools/utils/
+      if (p === '/tools/utils/BufferGeometryUtils.js' && req.method === 'GET') {
+        const data = await fs.readFile(path.resolve('tools-suite/three/examples/jsm/utils/BufferGeometryUtils.js'))
+        res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=86400' })
+        res.end(data)
+        return
+      }
       if (p.startsWith('/tools/assets-three/') && req.method === 'GET') {
         const rel = p.slice('/tools/assets-three/'.length)
         const base = path.resolve('tools-suite/three-vendor')
