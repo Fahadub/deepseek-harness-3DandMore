@@ -48,3 +48,5 @@ tools-suite/cordis-runtime.yml
 tools-suite/blender/
 tools-suite/godot/Godot.exe
 tools-suite/godot/Godot_v4.7.2-stable_win64_console.exe
+tools-suite/godot/Godot_v4.7.2-stable_win64_console.exe
+tools-suite/godot/*.exe
