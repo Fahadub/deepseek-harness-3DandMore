@@ -880,14 +880,25 @@ function tr(s) {
 }
 var origText = new WeakMap();
 var origTitle = new WeakMap();
+var lastText = new WeakMap();
+var origPlaceholder = new WeakMap();
 function trNode(el) {
+  if (el.closest('script, style, pre, code, textarea, [contenteditable="true"]')) return;
+  var ph = el.getAttribute('placeholder');
+  if (ph) {
+    if (!origPlaceholder.has(el)) origPlaceholder.set(el, ph);
+    var original = origPlaceholder.get(el);
+    var translated = lang === 'ar' ? original : ((lang === 'en' && PLACEHOLDER_EN[original]) || (DICT[lang] || {})[original] || original);
+    if (ph !== translated) el.setAttribute('placeholder', translated);
+  }
   if (el.children.length === 0) {
     var t = (el.textContent || '').trim();
     if (t) {
-      if (!origText.has(el)) origText.set(el, t);
+      if (!origText.has(el) || (lastText.has(el) && lastText.get(el) !== t)) origText.set(el, t);
       var src = origText.get(el);
       var nt = lang === 'ar' ? src : ((DICT[lang] || {})[src] || src);
       if (nt !== t) el.textContent = el.textContent.replace(t, nt);
+      lastText.set(el, nt);
     }
     var ti = el.getAttribute && el.getAttribute('title');
     if (ti) {
@@ -901,28 +912,17 @@ function trNode(el) {
       if (n.nodeType === 3) {
         var t2 = (n.textContent || '').trim();
         if (t2) {
-          if (!origText.has(n)) origText.set(n, t2);
+          if (!origText.has(n) || (lastText.has(n) && lastText.get(n) !== t2)) origText.set(n, t2);
           var src2 = origText.get(n);
           var nt2 = lang === 'ar' ? src2 : ((DICT[lang] || {})[src2] || src2);
           if (nt2 !== t2) n.textContent = n.textContent.replace(t2, nt2);
+          lastText.set(n, nt2);
         }
       }
     });
   }
 }
-function applyLang() {
-  document.documentElement.lang = lang;
-  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-  var sel = q('#langSel'); if (sel) sel.value = lang;
-  document.querySelectorAll('body *').forEach(function (el) {
-    trNode(el);
-    if (el.children.length === 0) {
-      var ph = el.getAttribute && el.getAttribute('placeholder');
-      if (ph && lang !== 'ar') { var pe = (PLACEHOLDER_EN[ph] !== undefined ? PLACEHOLDER_EN[ph] : DICT[lang] && DICT[lang][ph]); if (pe) el.setAttribute('placeholder', pe); }
-    }
-  });
-  // translate table headers and section labels that contain only text
-  document.querySelectorAll('th, .sb-sec, label.f, .kcol h3').forEach(function (el) { trNode(el); });
+function updatePageHeading() {
   var titles = {
     overview: lang === 'ar' ? ['نظرة عامة', 'صحة الخادم والإحصاءات'] : lang === 'en' ? ['Overview', 'Server health & stats'] : ['总览', '服务器健康与统计'],
     files: lang === 'ar' ? ['الملفات والمحرر', 'استعرض، حرّر، وأنشئ ملفات مساحة العمل'] : lang === 'en' ? ['Files & Editor', 'Browse, edit, and create workspace files'] : ['文件与编辑器', '浏览、编辑并创建工作区文件'],
@@ -940,28 +940,52 @@ function applyLang() {
     if (q('#pageTitle').textContent !== titles[active.dataset.t][0]) q('#pageTitle').textContent = titles[active.dataset.t][0];
     if (q('#pageDesc').textContent !== titles[active.dataset.t][1]) q('#pageDesc').textContent = titles[active.dataset.t][1];
   }
+}
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  var sel = q('#langSel'); if (sel) sel.value = lang;
+  document.querySelectorAll('body *').forEach(function (el) {
+    trNode(el);
+
+  });
+  // translate table headers and section labels that contain only text
+  document.querySelectorAll('th, .sb-sec, label.f, .kcol h3').forEach(function (el) { trNode(el); });
+  updatePageHeading();
   if (guideOpenFlag && q('#modalBg').classList.contains('on')) guideRender();
 }
 var _langSel = q('#langSel'); if (_langSel) _langSel.addEventListener('change', function () {
   lang = this.value; localStorage.setItem('toolsLang', lang); _applyLangSafe ? _applyLangSafe() : applyLang();
-  try { fetch('/tools/api/ui-lang', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ lang: lang }) }) } catch (e) { /* offline ok */ }
+  api('/tools/api/ui-lang', { method: 'POST', body: { lang: lang } }, function (err, response) {
+    if (err || response.s !== 200) toast(tr('تعذر حفظ اللغة — أعد المحاولة'), true);
+  });
 });
 function api(path, opts, cb) {
-  opts = opts || {};
-  opts.headers = opts.headers || {};
-  if (opts.body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(opts.body); }
-  fetch(path, opts).then(function (r) {
+  function notify(err, result) {
+    if (!cb) return;
+    try { cb(err, result); }
+    catch (callbackError) {
+      console.error('[hub] API callback failed:', callbackError);
+      toast(tr('تعذر تحديث العرض — أعد تحميل الصفحة'), true);
+    }
+  }
+  return Promise.resolve().then(function () {
+    opts = Object.assign({}, opts || {});
+    opts.headers = Object.assign({}, opts.headers || {});
+    if (opts.body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(opts.body); }
+    return fetch(path, opts);
+  }).then(function (r) {
     return r.text().then(function (tx) {
-      var j = null;
-      try { j = JSON.parse(tx); } catch (eP) { j = null; }
-      if (j === null || typeof j !== 'object') {
-        var snip = tx ? String(tx).slice(0, 140) : 'جسم فارغ';
-        return { s: r.status, j: { error: 'رد غير JSON من الخادم (HTTP ' + r.status + ') — ' + snip } };
-      }
+      var j;
+      try { j = JSON.parse(tx); }
+      catch (parseError) { throw new Error('Invalid server response (HTTP ' + r.status + ') — reload or check the server. / رد الخادم ليس JSON صالحاً'); }
+      if (j === null || typeof j !== 'object') throw new Error('Expected a JSON object from the server. / رد الخادم غير صالح');
       return { s: r.status, j: j };
     });
-  })
-    .then(function (x) { if (cb) cb(null, x); }, function (e) { if (cb) cb(new Error('تعذر الاتصال بالخادم — تحقق أنه يعمل (' + String((e && e.message) || e) + ')')); });
+  }).then(function (x) { notify(null, x); }, function (e) {
+    var error = new Error('Request failed — check the server and retry. / تعذر الطلب: ' + String((e && e.message) || e));
+    notify(error, { s: 0, j: { error: error.message } });
+  });
 }
 function toast(msg, isErr) {
   var t = document.getElementById('toast');
@@ -1006,7 +1030,8 @@ document.querySelectorAll('#tabs .sb-item').forEach(function (b) {
     document.querySelectorAll('section.tab').forEach(function (x) { x.classList.remove('on'); });
     b.classList.add('on'); q('#tab-' + b.dataset.t).classList.add('on');
     var m = PAGE_META[b.dataset.t] || ['', ''];
-    q('#pageTitle').textContent = m[0]; q('#pageDesc').textContent = m[1];
+    q('#pageTitle').textContent = tr(m[0]); q('#pageDesc').textContent = tr(m[1]);
+    updatePageHeading();
     if (b.dataset.t === 'overview') loadHealth();
     if (b.dataset.t === 'files') loadTree();
     if (b.dataset.t === 'kanban') { loadKanban(); loadAgentTodos(); }
@@ -1185,7 +1210,7 @@ function runSearch() {
         document.querySelector('#tabs .sb-item[data-t=files]').classList.add('on');
         document.querySelectorAll('section.tab').forEach(function (s) { s.classList.remove('on'); });
         q('#tab-files').classList.add('on');
-        q('#pageTitle').textContent = PAGE_META.files[0]; q('#pageDesc').textContent = PAGE_META.files[1];
+        updatePageHeading();
         loadTree(); openFile(r.file, 0);
       });
       tb.appendChild(tr);
@@ -2113,26 +2138,50 @@ try { loadEngines(); } catch(e) { console.warn('loadEngines', e); }
 try { loadAssets(); } catch(e) { console.warn('loadAssets', e); }
 var _langBusy = false;
 var _langTimer = null;
+var _langRoots = new Set();
+var _langObserver;
 var _applyLangSafe = function () {
   if (_langBusy) return;
   _langBusy = true;
-  try { applyLang(); } finally { _langBusy = false; }
-};
-new MutationObserver(function (muts) {
-  if (lang === 'ar' || _langBusy) return;
-  var touched = false;
-  for (var mi = 0; mi < muts.length; mi++) {
-    var add = muts[mi].addedNodes;
-    for (var mk = 0; mk < add.length; mk++) {
-      var mn = add[mk];
-      if (mn.nodeType !== 1) continue; // تجاهل عقد النص: تحديثات المؤشرات لا تستدعي إعادة الترجمة
-      touched = true;
-    }
+  try { applyLang(); } finally {
+    if (_langObserver) _langObserver.takeRecords();
+    _langBusy = false;
   }
-  if (!touched) return; // لا مسح كامل للصفحة عند تحديثات نصية دورية (أداء)
-  clearTimeout(_langTimer);
-  _langTimer = setTimeout(function () { if (lang !== 'ar' && !_langBusy) _applyLangSafe(); }, 250);
-}).observe(document.body, { childList: true, subtree: true });
+};
+_langObserver = new MutationObserver(function (muts) {
+  if (lang === 'ar' || _langBusy) return;
+  muts.forEach(function (m) {
+    if (m.type === 'characterData' && m.target.parentElement) _langRoots.add(m.target.parentElement);
+    m.addedNodes.forEach(function (n) {
+      var el = n.nodeType === 1 ? n : n.parentElement;
+      if (el) _langRoots.add(el);
+    });
+  });
+  if (!_langRoots.size || _langTimer !== null) return;
+  _langTimer = setTimeout(function () {
+    _langTimer = null;
+    var roots = Array.from(_langRoots); _langRoots.clear();
+    if (lang === 'ar') return;
+    _langBusy = true;
+    try {
+      roots.forEach(function (el) {
+        if (!el.isConnected || roots.some(function (other) { return other !== el && other.contains(el); })) return;
+        trNode(el);
+        el.querySelectorAll('*').forEach(trNode);
+      });
+    } finally {
+      _langObserver.takeRecords(); // Do not observe our own translations.
+      _langBusy = false;
+    }
+  }, 250);
+});
+_langObserver.observe(document.body, { childList: true, characterData: true, subtree: true });
+window.addEventListener('pagehide', function () {
+  clearTimeout(_langTimer); _langTimer = null; _langRoots.clear(); _langObserver.disconnect();
+});
+window.addEventListener('pageshow', function () {
+  _langObserver.observe(document.body, { childList: true, characterData: true, subtree: true });
+});
 setInterval(function () { if (!document.hidden) loadHealth(); }, 15000);
 </script>
 </body>

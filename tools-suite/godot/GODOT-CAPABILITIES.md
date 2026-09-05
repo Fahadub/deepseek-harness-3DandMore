@@ -237,3 +237,135 @@ func _input(event):                 # instantaneous events (keys/touch)
 ## 13) Project Isolation (English, mandatory)
 
 The agent must NOT browse or reference any workspace/project other than the one open in the current session — UNLESS the client explicitly gives the path, asks to search all projects, or the task requires it by explicit request. When needing a file from another project: ask the client for the path first. Never scan other workspaces on your own.
+
+## 14) بناء ألعاب 2D RPG — دفتر الأنماط (إلزامي عند وضع rpg2d)
+
+### الخريطة
+- استخدم `TileMapLayer` مع tileset 16×16 أو 32×32 بكسل — ارسم الأرضية والجدران والعناصر في طبقات منفصلة.
+- عرّف `TileSet` بأشكال تصادم للجدران والماء والمنحدرات.
+- الكاميرا: `Camera2D` مع `limit_smoothed` وحدود الخريطة.
+
+### الشخصيات
+- اللاعب: `CharacterBody2D` + `AnimatedSprite2D` (idle/walk 4 اتجاهات × 4 إطارات).
+- NPC: نفس البنية + منطقة `Area2D` للاقتراب + حوار.
+- الأعداء: أنماط حركة (دوري/مطاردة/هجوم) + HP + أنيميشن موت.
+
+### القتال (دورى — Turn-based)
+- مشهد منفصل للمعركة: قائمة أوامر (هجوم/سحر/عنصر/هروب) + شريط صحة/مانا.
+- الأضرار: معادلة بسيطة (هجوم - دفاع) مع عشوائية ±15%.
+
+### الحوارات
+- مربع حوار أسفل الشاشة: نص + صورة متحدث + اختيارات (نعم/لا/أسئلة).
+- بيانات الحوار في JSON: `{npc_id: [{text, choices, next}]}`.
+
+### المهام والقوائم
+- قائمة مهام: `{id, title, desc, state: locked/active/done}` — تُحدّث عبر إشارات.
+- الحقيبة: شبكة عناصر + وصف + استخدام/إسقاط.
+- المتجر: قائمة بيع/شراء بأسعار — عملة ذهبية.
+
+### الحفظ
+- `localStorage` (للويب) أو `FileAccess` (لـGodot): موضع اللاعب + الحقيبة + المهام + صحة الأعداء.
+
+### السبرايتس
+- ابحث في local_assets عن .png/.gif — أو ولّد برمجياً: `16×16` بكسل آرت بألوان محدودة.
+- كل سبرايت: `SpriteFrames` مع `Animation` لكل حالة (idle/walk/attack/die).
+
+## 14) 2D RPG Building Patterns (English)
+
+Map: TileMapLayer + TileSet collision shapes, layered ground/walls/objects.
+Characters: CharacterBody2D + AnimatedSprite2D (4-direction × 4-frame). NPC with Area2D trigger + dialog. Enemies with patrol/chase/attack patterns.
+Combat: Turn-based — separate battle scene with command menu (attack/magic/item/flee) + HP/MP bars. Damage: (atk - def) ± 15%.
+Dialogs: bottom text box with speaker portrait + branching choices. Data in JSON.
+Quests/Inventory/Shop: quest list with states, item grid with descriptions, buy/sell shop with gold.
+Save: localStorage (web) or FileAccess (Godot).
+Sprites: search local_assets for .png, or generate procedural pixel art 16×16.
+
+## 15) الدقة الصفرية + البحث عن GLB قبل التصميم + تصوير داخل اللعبة (إلزامي)
+
+### 1. الدقة الصفرية (Zero-Tolerance)
+**حتى 0.01% خطأ ممنوع.** كل عنصر فيزيائي (مضمار، جدار، جسر، أرضية) يجب أن يكون:
+- **بلا فجوات** — حواف المضمار/الطريق متصلة تماماً بلا انقطاع أو فراغ
+- **بلا تداخل خاطئ** — المجسمات لا تخترق بعضها بشكل غير مقصود
+- **مطابقة تامة** — الأرضيات والأسطح مصفوفة بدقة على التضاريس
+- **اختبار إلزامي**: بعد البناء، شغّل فحص «SETTLE» — أي عنصر يتحرك أكثر من 0.001م = فشل
+- **في السباقات**: المضمار متصل من البداية للنهاية بلا فجوة، والحواجز مثبتة صح
+
+### 2. البحث عن GLB قبل التصميم (Asset-First Design)
+قبل أي تصميم يدوي:
+1. ابحث في local_assets عن GLB مطابق للفكرة (مضمار، سيارة، مبنى، شخصية)
+2. إن وُجد → استخدمه وعدّله عبر asset_pipeline
+3. إن لم يوجد → **اعرض على العميل خيارين**:
+   - (أ) أبحث عن GLB مجاني من الإنترنت (Khronos/Sketchfab) وأبني عليه
+   - (ب) أصمم من الصفر procedural
+   - **انتظر اختيار العميل** ثم نفّذ
+
+### 3. تصوير فيديو داخل اللعبة (زر F)
+كل لعبة MUST تحتوي على:
+```gdscript
+# recorder.gd — Autoload: زر F لتصوير/إيقاف الفيديو
+extends Node
+var recording := false
+var frames := 0
+var dir := ""
+func _input(event):
+    if event is InputEventKey and event.pressed and event.keycode == KEY_F:
+        recording = !recording
+        if recording:
+            dir = "user://rec_%d" % Time.get_ticks_msec()
+            DirAccess.make_dir_recursive_absolute(dir)
+            frames = 0
+        else:
+            print("Recording stopped: %d frames → " % frames, dir)
+func _process(delta):
+    if recording:
+        frames += 1
+        var img = get_viewport().get_texture().get_image()
+        img.save_png(dir + "/f_%06d.png" % frames)
+```
+- الصور تُجمع لاحقاً بـ ffmpeg أو عبر أداة المحرر
+- زر **F** = بدء/إيقاف التسجيل (يظهر مؤشر REC على الشاشة)
+- يعمل مع أو بدون صوت
+
+## 15) Zero-Tolerance Precision + Asset-First Design + In-Game Recording (English)
+
+### 1. Zero-Tolerance
+**Even 0.01% error is forbidden.** Every physical element (track, wall, bridge, floor) must have:
+- **Zero gaps** — track/road edges fully connected, no breaks
+- **Zero incorrect overlaps** — no unintentional mesh intersection
+- **Perfect alignment** — surfaces precisely matched to terrain
+- **Mandatory test**: run SETTLE check after build — any element moving >0.001m = fail
+- **Racing**: track fully connected start-to-finish, barriers correctly placed
+
+### 2. Asset-First Design
+Before any manual design:
+1. Search local_assets for matching GLB (track, car, building, character)
+2. If found → use it, modify via asset_pipeline
+3. If not → **present two options to client**: (a) search free GLB online, (b) design from scratch
+   **Wait for client choice** then execute
+
+### 3. In-Game Video Recording (F key)
+Every game MUST include:
+```gdscript
+# recorder.gd — Autoload: F key to start/stop recording
+extends Node
+var recording := false
+var frames := 0
+var dir := ""
+func _input(event):
+    if event is InputEventKey and event.pressed and event.keycode == KEY_F:
+        recording = !recording
+        if recording:
+            dir = "user://rec_%d" % Time.get_ticks_msec()
+            DirAccess.make_dir_recursive_absolute(dir)
+            frames = 0
+        else:
+            print("Recording stopped: %d frames → " % frames, dir)
+func _process(delta):
+    if recording:
+        frames += 1
+        var img = get_viewport().get_texture().get_image()
+        img.save_png(dir + "/f_%06d.png" % frames)
+```
+- Frames combined later via ffmpeg or harness tool
+- **F key** = toggle recording (show REC indicator on screen)
+- Works with or without audio

@@ -1,6 +1,6 @@
 /**
  * Tools suite — file version history & restore.
- * Ports the original IDE's file version history / undo-delete / smart-rollback:
+ * Ports TOOLS IDE's file version history / undo-delete / smart-rollback:
  * every agent write/edit snapshots the prior file content first, and the
  * TOOLS hub can list, view, restore, or diff any snapshot.
  */

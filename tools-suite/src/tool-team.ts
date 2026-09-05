@@ -1,6 +1,6 @@
 /**
  * Tools suite — specialized parallel agent team + 24/7 auto agent.
- * Ports the original IDE's parallel-agents.js (9 specialized roles with task
+ * Ports TOOLS IDE's parallel-agents.js (9 specialized roles with task
  * fan-out) and autonomous-mode.js (objective-driven auto agent with
  * round/time limits), rebuilt on dsh's subagent seam.
  */
@@ -12,7 +12,7 @@ import { nextAutoId, registerAutoAgent, type AutoAgentRun } from './lib/registry
 export const name = 'tool-parallel'
 export const inject = ['tools', 'subagents']
 
-/** The 9 the original IDE specialist roles (personas ported from agent-roles.js). */
+/** The 9 TOOLS IDE specialist roles (personas ported from agent-roles.js). */
 export const ROLES: Record<string, { title: string; specialty: string; persona: string }> = {
   orchestrator: {
     title: 'Orchestrator',

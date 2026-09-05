@@ -1,6 +1,6 @@
 /**
  * Tools suite — HTTP hub served from the dsh web server under /tools.
- * Ports the the original IDE Pro Mode surface onto DeepSeek Harness:
+ * Ports the TOOLS IDE Pro Mode surface onto DeepSeek Harness:
  * file explorer + editor, live preview, Kanban board, API tester,
  * file version history, auto-agent monitor, project ZIP + email,
  * Git panel, and a health dashboard. Arabic RTL UI.
@@ -142,26 +142,48 @@ export function apply(ctx: Context): void {
     const { mergeNewProposals } = await import('./tool-guardian.ts')
     mergeNewProposals(s, found)
   }
+  let guardianGeneration = 0
+  let guardianDisposed = false
+  let guardianBusy = false
   function restartGuardianLoop(): void {
+    const generation = ++guardianGeneration
     if (guardianTimer !== null) clearInterval(guardianTimer)
     guardianTimer = null
     void (async () => {
       const { loadGuardian, detectProblems, mergeNewProposals, saveGuardian } = await import('./tool-guardian.ts')
       const s = await loadGuardian()
-      if (!s.enabled) return
+      if (guardianDisposed || generation !== guardianGeneration || !s.enabled) return
+      const minutes = Number.isFinite(s.intervalMin) ? Math.max(1, Math.min(1440, s.intervalMin)) : 30
       guardianTimer = setInterval(() => {
+        if (guardianBusy || guardianDisposed || generation !== guardianGeneration) return
+        guardianBusy = true
         void (async () => {
           try {
             const cur = await loadGuardian()
-            if (!cur.enabled) return
-            mergeNewProposals(cur, await detectProblems(workspacesOf(ctx)))
+            if (!cur.enabled || guardianDisposed || generation !== guardianGeneration) return
+            const found = await detectProblems(workspacesOf(ctx))
+            if (guardianDisposed || generation !== guardianGeneration) return
+            mergeNewProposals(cur, found)
             await saveGuardian(cur)
-          } catch { /* الفحص لا يكسر الخادم أبدًا */ }
+          } catch (err) {
+            console.error('[tools] Guardian scan failed:', err)
+          } finally {
+            guardianBusy = false
+          }
         })()
-      }, s.intervalMin * 60_000)
-    })()
+      }, minutes * 60_000)
+    })().catch(err => console.error('[tools] Guardian initialization failed:', err))
   }
-  restartGuardianLoop()
+  ctx.effect(() => {
+    guardianDisposed = false
+    restartGuardianLoop()
+    return () => {
+      guardianDisposed = true
+      ++guardianGeneration
+      if (guardianTimer !== null) clearInterval(guardianTimer)
+      guardianTimer = null
+    }
+  }, 'tool-http: guardian lifecycle')
 
   // خط أنابيب وكيل الباحث: تسلسلي، سقف 20، حذف بعد كل معالجة + علامة MD دائمة.
   async function researchRun(): Promise<void> {
@@ -250,15 +272,27 @@ export function apply(ctx: Context): void {
   // A key saved once from the hub UI outlives restarts even when the process
   // is launched without TRIPO_API_KEY in its environment.
   void (async () => {
-    if ((process.env.TRIPO_API_KEY ?? '').trim() === '') {
-      const saved = await readKeyFile()
-      if (saved !== '') process.env.TRIPO_API_KEY = saved
+    try {
+      if ((process.env.TRIPO_API_KEY ?? '').trim() === '') {
+        const saved = await readKeyFile()
+        if (saved !== '') process.env.TRIPO_API_KEY = saved
+      }
+    } catch (err) {
+      // فشل قراءة مفتاح Tripo المحفوظ لا يوقف الخادم — يسجل فقط
+      console.error('[tools] تعذر استرجاع مفتاح Tripo المحفوظ:', err instanceof Error ? err.message : String(err))
     }
   })()
 
   const dispatch = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    const url = new URL(req.url ?? '/', 'http://127.0.0.1')
-    const p = decodeURIComponent(url.pathname).replace(/\/+$/, '') || '/tools'
+    let url: URL
+    let p: string
+    try {
+      url = new URL(req.url ?? '/', 'http://127.0.0.1')
+      p = decodeURIComponent(url.pathname).replace(/\/+$/, '') || '/tools'
+    } catch {
+      sendJson(res, 400, { error: 'Invalid URL encoding — check percent escapes. / ترميز الرابط غير صالح' })
+      return
+    }
     const ws = url.searchParams.get('ws') ?? ''
 
     if (token !== '') {
@@ -271,7 +305,7 @@ export function apply(ctx: Context): void {
 
     const resolveWs = (): { root: string; meta: WorkspaceLike } => {
       const found = workspacesOf(ctx).find(w => w.path === ws || w.id === ws)
-      if (found === undefined) throw new Error(`workspace not registered: ${ws}`)
+      if (found === undefined) throw new Error(`مساحة العمل غير مسجّلة في المركز («${ws}») — افتح مساحة صحيحة أو أضف المشروع من زر «إضافة مشروع» في الأعلى`)
       return { root: found.path, meta: found }
     }
 
@@ -323,11 +357,11 @@ export function apply(ctx: Context): void {
       if (p === '/tools/api/workspaces/add' && req.method === 'POST') {
         const body = await readJsonBody(req)
         const dirPath = String(body.path ?? '').trim()
-        if (dirPath === '') throw new Error('missing path')
+        if (dirPath === '') throw new Error('Project path required — enter an absolute folder path. / مسار المشروع مطلوب')
         const stat = await fs.stat(dirPath).catch(() => null)
         if (stat === null || !stat.isDirectory()) throw new Error(`not a directory: ${dirPath}`)
         const reg = (ctx as unknown as { workspaceRegistry?: { create: (path: string, title?: string) => Promise<WorkspaceLike>; resolveByPath: (path: string) => Promise<WorkspaceLike | undefined> } }).workspaceRegistry
-        if (reg === undefined) throw new Error('workspace registry unavailable')
+        if (reg === undefined) throw new Error('Workspace registry unavailable — reload the page. / سجل مساحات العمل غير متاح')
         const existing = await reg.resolveByPath(dirPath).catch(() => undefined)
         if (existing === undefined) await reg.create(dirPath)
         sendJson(res, 200, { ok: true, workspaces: workspacesOf(ctx) })
@@ -338,7 +372,7 @@ export function apply(ctx: Context): void {
         const rel = p.slice('/tools/assets/three/'.length)
         const base = path.resolve('tools-suite/three')
         const target = path.resolve(base, rel)
-        if (target !== base && !target.startsWith(base + path.sep)) throw new Error('bad path')
+        if (target !== base && !target.startsWith(base + path.sep)) throw new Error('Path outside permitted directory. / المسار خارج المجلد المسموح')
         const data = await fs.readFile(target)
         res.writeHead(200, {
           'content-type': target.endsWith('.js') ? 'text/javascript; charset=utf-8' : target.endsWith('.html') ? 'text/html; charset=utf-8' : target.endsWith('.json') ? 'application/json; charset=utf-8' : 'application/octet-stream',
@@ -359,7 +393,7 @@ export function apply(ctx: Context): void {
         const body = await readJsonBody(req)
         const { autoContinueApi } = await import('./tool-auto-continue.ts')
         const api = autoContinueApi as { armReal: Function; cancel: Function; loadState: Function; saveState: Function; fire: Function } | undefined
-        if (api === undefined) throw new Error('auto-continue engine unavailable')
+        if (api === undefined) throw new Error('Auto-continue unavailable — restart the server. / الاستئناف التلقائي غير متاح')
         const action = String(body.action ?? 'configure')
         if (action === 'cancel') { sendJson(res, 200, { ok: true, state: await api.cancel(root) }); return }
         if (action === 'fire') { await api.fire(root); sendJson(res, 200, { ok: true, state: await api.loadState(root) }); return }
@@ -465,7 +499,7 @@ export function apply(ctx: Context): void {
         const rel = p.slice('/tools/assets-three/'.length)
         const base = path.resolve('tools-suite/three-vendor')
         const target = path.resolve(base, rel)
-        if (target !== base && !target.startsWith(base + path.sep)) throw new Error('bad path')
+        if (target !== base && !target.startsWith(base + path.sep)) throw new Error('Path outside permitted directory. / المسار خارج المجلد المسموح')
         const data = await fs.readFile(target)
         res.writeHead(200, { 'content-type': target.endsWith('.js') ? 'text/javascript; charset=utf-8' : 'application/octet-stream', 'cache-control': 'public, max-age=86400' })
         res.end(data)
@@ -492,7 +526,7 @@ export function apply(ctx: Context): void {
         const body = await readJsonBody(req)
         const src = String(body.ws ?? '')
         const found = workspacesOf(ctx).find(w => w.path === src || w.id === src)
-        if (found === undefined) throw new Error(`workspace not registered: ${src}`)
+        if (found === undefined) throw new Error(`مساحة العمل المصدر غير مسجّلة: ${src}`)
         const dst = found.path.endsWith('-تحرير') ? found.path + '-2' : found.path + '-تحرير'
         const code = await new Promise<number>((resolve) => {
           const ch = spawn('robocopy', [found.path, dst, '/E', '/XD', 'node_modules', '.git', '/NFL', '/NDL', '/NJH', '/NJS'], { windowsHide: true })
@@ -501,7 +535,7 @@ export function apply(ctx: Context): void {
         })
         if (code > 7) throw new Error(`robocopy failed (${code})`)
         const reg = (ctx as unknown as { workspaceRegistry?: { create: (p: string, title?: string) => Promise<WorkspaceLike> } }).workspaceRegistry
-        if (reg === undefined) throw new Error('workspace registry unavailable')
+        if (reg === undefined) throw new Error('Workspace registry unavailable — reload the page. / سجل مساحات العمل غير متاح')
         await reg.create(dst)
         sendJson(res, 200, { ok: true, path: dst, ws: dst })
         return
@@ -517,7 +551,7 @@ export function apply(ctx: Context): void {
       if (p === '/tools/api/engines/download' && req.method === 'POST') {
         const body = await readJsonBody(req)
         const engine = String(body.engine ?? '')
-        if (engine !== 'blender' && engine !== 'godot') throw new Error('engine must be "blender" or "godot"')
+        if (engine !== 'blender' && engine !== 'godot') throw new Error('Choose blender or godot. / اختر blender أو godot فقط')
         if (engineJob !== null && engineJob.phase === 'downloading') {
           sendJson(res, 409, { ok: false, error: `تنزيل ${engineJob.engine} قيد التنفيذ بالفعل`, job: engineJob })
           return
@@ -555,7 +589,7 @@ export function apply(ctx: Context): void {
         const body = await readJsonBody(req)
         const target = String(body.ws ?? body.path ?? '')
         const found = workspacesOf(ctx).find(w => w.path === target || w.id === target)
-        if (found === undefined) throw new Error(`workspace not registered: ${target}`)
+        if (found === undefined) throw new Error(`مساحة العمل الهدف غير مسجّلة: ${target}`)
         const exe = path.resolve('tools-suite/godot/Godot.exe')
         await fs.access(exe).catch(() => { throw new Error('Godot غير مثبت في tools-suite/godot — شغّل سكربت التحميل أولًا') })
         const ch = spawn(exe, ['--path', found.path, '-e'], { detached: true, stdio: 'ignore', windowsHide: false })
@@ -568,7 +602,7 @@ export function apply(ctx: Context): void {
       if (p === '/tools/api/bridge/session' && req.method === 'GET') {
         const wsParam = url.searchParams.get('ws') ?? ''
         const found = workspacesOf(ctx).find(w => w.path === wsParam || w.id === wsParam)
-        if (found === undefined) throw new Error(`workspace not registered: ${wsParam}`)
+        if (found === undefined) throw new Error(`مساحة العمل غير مسجّلة: ${wsParam}`)
         // فك ترميز أسماء مجلدات الجلسات (~XXXX → حرف) ومطابقة المعايَرة — أصلح من تخمين التشفير
         const decodeDir = (d: string): string => d.replace(/~([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16))).replace(/-/g, '/')
         // النقطتان في المحرف القرص تضيعان في الترميز (تتحولان لشرطة) — قارن بدونهما
@@ -817,9 +851,13 @@ export function apply(ctx: Context): void {
         const s = await loadGuardian()
         // فحص لحظي عند الطلب حتى لو كان الوكيل معطلاً (قراءة فقط، لا اقتراحات تُنفذ)
         if (s.enabled) {
-          const { mergeNewProposals } = await import('./tool-guardian.ts')
-          mergeNewProposals(s, await detectProblems(workspacesOf(ctx)))
-          await (await import('./tool-guardian.ts')).saveGuardian(s)
+          try {
+            const { mergeNewProposals } = await import('./tool-guardian.ts')
+            mergeNewProposals(s, await detectProblems(workspacesOf(ctx)))
+            await (await import('./tool-guardian.ts')).saveGuardian(s)
+          } catch (detectErr) {
+            console.warn('[guardian] detection error (non-fatal):', String(detectErr).slice(0, 200))
+          }
         }
         sendJson(res, 200, s)
         return
@@ -833,7 +871,10 @@ export function apply(ctx: Context): void {
           const n = Number(body.intervalMin)
           if (n === 10 || n === 15 || n === 20) s.intervalMin = n
         }
-        if (body.action === 'scan-now') await mergeNewProposalsSafe(s, await g.detectProblems(workspacesOf(ctx)))
+        if (body.action === 'scan-now') {
+          try { await mergeNewProposalsSafe(s, await g.detectProblems(workspacesOf(ctx))) }
+          catch (scanErr) { console.warn('[guardian] scan error (non-fatal):', String(scanErr).slice(0, 200)) }
+        }
         if (body.action === 'decide' && body.id !== undefined) {
           if (body.accept === true) {
             const r = await g.acceptProposal(s, String(body.id))
@@ -933,7 +974,7 @@ export function apply(ctx: Context): void {
         const body = await readJsonBody(req)
         const rel = String(body.p ?? '')
         const content = String(body.content ?? '')
-        if (rel === '') throw new Error('missing p')
+        if (rel === '') throw new Error('File path required. / مسار الملف مطلوب')
         const target = safeJoin(root, rel)
         await captureQuiet(ctx, root, target, 'hub-write')
         await fs.mkdir(path.dirname(target), { recursive: true })
@@ -994,7 +1035,7 @@ export function apply(ctx: Context): void {
       if (p === '/tools/api/versions/get' && req.method === 'GET') {
         const { root } = resolveWs()
         const snap = await getSnapshotContent(root, url.searchParams.get('id') ?? '')
-        if (snap === undefined) throw new Error('snapshot not found')
+        if (snap === undefined) throw new Error('Snapshot not found — refresh version history. / اللقطة غير موجودة')
         const current = await fs.readFile(path.resolve(root, snap.meta.rel)).catch(() => null)
         sendJson(res, 200, {
           meta: snap.meta,
@@ -1007,7 +1048,7 @@ export function apply(ctx: Context): void {
         const { root } = resolveWs()
         const body = await readJsonBody(req)
         const meta = await restoreSnapshot(root, String(body.id ?? ''))
-        if (meta === undefined) throw new Error('snapshot not found')
+        if (meta === undefined) throw new Error('Snapshot not found — refresh version history. / اللقطة غير موجودة')
         sendJson(res, 200, { ok: true, restored: meta })
         return
       }
@@ -1064,7 +1105,7 @@ export function apply(ctx: Context): void {
       if (p === '/tools/api/agents/stop' && req.method === 'POST') {
         const body = await readJsonBody(req)
         const run = getAutoAgent(String(body.id ?? ''))
-        if (run === undefined) throw new Error('agent not found')
+        if (run === undefined) throw new Error('Agent not found — refresh the agent list. / الوكيل غير موجود')
         run.stop()
         ok(res)
         return
@@ -1084,7 +1125,7 @@ export function apply(ctx: Context): void {
         const { root } = resolveWs()
         const body = await readJsonBody(req)
         const msg = String(body.message ?? '').trim()
-        if (msg === '') throw new Error('missing commit message')
+        if (msg === '') throw new Error('Commit message required — describe your changes. / اكتب وصفاً للتغييرات')
         const r = await git(root, ['commit', '-am', msg])
         sendJson(res, 200, { code: r.code, result: r.out })
         return
@@ -1118,7 +1159,7 @@ export function apply(ctx: Context): void {
         const { root, meta } = resolveWs()
         const body = await readJsonBody(req)
         const to = String(body.to ?? '')
-        if (to === '' || !to.includes('@')) throw new Error('valid recipient required')
+        if (to === '' || !to.includes('@')) throw new Error('Valid recipient email required. / أدخل بريد مستلم صالحاً')
         const cfg = await readJson<SmtpConfig>(path.join(toolsDirFor(root), 'smtp.json'), {} as Partial<SmtpConfig> as SmtpConfig)
         if (cfg.host === undefined || cfg.host === '') throw new Error('SMTP not configured — save settings first')
         const entries = (await walk(root, { maxEntries: 8000 })).filter(e => e.isFile && e.size < 32 * 1024 * 1024)
@@ -1137,7 +1178,9 @@ export function apply(ctx: Context): void {
 
       sendJson(res, 404, { error: `not found: ${req.method} ${p}` })
     } catch (err) {
-      sendJson(res, 400, { error: String(err instanceof Error ? err.message : err) })
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[tools] فشل طلب', req.method, p, '—', msg)
+      sendJson(res, 400, { error: msg })
     }
   }
 

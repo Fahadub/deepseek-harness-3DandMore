@@ -7,6 +7,7 @@
  *    play/pause/stop and speed controls (speechSynthesis).
  */
 import type { Context } from '@deepseek-ai/cordis'
+import { BUILD_PROTOCOL_TEXT } from './lib/game-build-guide.ts'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 
 export const name = 'tool-ui-inject'
@@ -125,6 +126,10 @@ const INJECTED_SNIPPET = `
     <button class="bopt" data-mode="mixed">
       <span class="n">🔀 مزج المحركين معاً</span>
       <span class="d">القرار لكل مكوّن: معاينة/واجهة/عارض ويب بـthree.js، واللعبة الفعلية مشروع Godot — بنفس الأصول الموحدة المعالجة ببلندر</span>
+    </button>
+    <button class="bopt" data-mode="rpg2d">
+      <span class="n">🎮 بناء لعبة 2D RPG</span>
+      <span class="d">لعبة كاملة بأسلوب RPG — خرائط بلاطات، حوارات NPC، نظام قتال، مهام، حقيبة، متاجر — بـGodot TileMap أو three.js</span>
     </button>
     <button class="bopt" data-mode="off">
       <span class="n">↩️ إلغاء وضع البناء</span>
@@ -260,12 +265,13 @@ const INJECTED_SNIPPET = `
 
   /* ---- زر وضع البناء: three.js / Godot / مزيج ---- */
   var BUILD_TEXTS = {
-    three: 'وضع البناء: three.js — ابنِ اللعبة كتطبيق ويب كامل بمكتبة three.js المحلية (انسخ الإضافات المطلوبة فقط من tools-suite/three واتبع كتاب CAPABILITIES.md بكل سياساته: مقياس بشري واقعي، لا أيقونات جاهزة، بوابة أداء 45+ FPS، معيار scene.json). ابحث في local_assets أولاً واستخدم الجاهز، وأي مجسم يحتاج تحسيناً (اتجاه، محور، مقاس، تصادم، تخفيف مضلعات، تجهيز حركة) مرّره عبر asset_pipeline ببلندر قبل وضعه — بلندر يُستخدم متى حسّن أي شيء في التصميم أو اللعبة أو الحركة.',
-    godot: 'وضع البناء: Godot — ابنِ مشروع Godot 4.7 كاملاً يفتح بالمحرر بلا أخطاء وفق كتاب GODOT-CAPABILITIES ودفاتر PLAYBOOK (هيكل project.godot/scenes/scripts/assets، GDScript بأنماط بشرية، مقاسات مترية واقعية، واجهة عربية RTL). ابحث في local_assets أولاً، وجهّز كل مجسم عبر asset_pipeline ببلندر (اتجاه/محور/مقاس/تصادم) قبل استيراده في Godot — بلندر يُستخدم متى حسّن أي شيء في التصميم أو اللعبة أو الحركة. سلّم بفتح Godot من زر المركز على مجلد المشروع.',
+    three: 'وضع البناء: three.js — ابنِ اللعبة كتطبيق ويب كامل بمكتبة three.js المحلية (انسخ الإضافات المطلوبة فقط من tools-suite/three واتبع كتاب CAPABILITIES.md بكل سياساته: مقياس بشري واقعي، لا أيقونات جاهزة، ميزانية أداء تقاس على الجهاز المستهدف، معيار scene.json). ابحث في local_assets أولاً واستخدم الجاهز، وأي مجسم يحتاج تحسيناً (اتجاه، محور، مقاس، تصادم، تخفيف مضلعات، تجهيز حركة) مرّره عبر asset_pipeline ببلندر قبل وضعه — بلندر يُستخدم متى حسّن أي شيء في التصميم أو اللعبة أو الحركة.',
+    godot: 'وضع البناء: Godot — ابنِ مشروع Godot 4.x كاملاً وفق النسخة المثبتة يفتح بالمحرر بلا أخطاء وفق كتاب GODOT-CAPABILITIES ودفاتر PLAYBOOK (هيكل project.godot/scenes/scripts/assets، GDScript بأنماط بشرية، مقاسات مترية واقعية، واجهة عربية RTL). ابحث في local_assets أولاً، عالج المجسمات التي تحتاج تصحيحاً عبر asset_pipeline ببلندر، مع الحفاظ على التحريك والهياكل العظمية (اتجاه/محور/مقاس/تصادم) قبل استيراده في Godot — بلندر يُستخدم متى حسّن أي شيء في التصميم أو اللعبة أو الحركة. سلّم بفتح Godot من زر المركز على مجلد المشروع.',
     mixed: 'وضع البناء: مزيج three.js + Godot — قرّر لكل مكوّن الأنسب: المعاينة والواجهات والعارض الفوري بـthree.js (كتاب CAPABILITIES)، واللعبة الفعلية مشروع Godot كامل (كتاب GODOT-CAPABILITIES)، مع مشاركة نفس الأصول الموحدة: كل مجسم من local_assets يُعالج مرة واحدة عبر asset_pipeline ببلندر (اتجاه/محور/مقاس/تصادم/تجهيز حركة) ثم يُستخدم في المحركين — بلندر يُستخدم متى حسّن أي شيء في التصميم أو اللعبة أو الحركة.',
-    off: 'أُلغي وضع البناء المحدد — عد لاختيار المحرك الأنسب تلقائياً حسب طلبي في كل مرة.'
+    off: 'أُلغي وضع البناء المحدد — عد لاختيار المحرك الأنسب تلقائياً حسب طلبي في كل مرة.',
+    rpg2d: 'وضع البناء: 2D RPG — ابنِ لعبة RPG كاملة بـGodot 2D (اتبع قسم 2D-RPG في GODOT-CAPABILITIES): TileMapLayer للخرائط، AnimatedSprite2D للشخصيات، حوارات NPC بمربعات حوار، نظام قتال (دوري أو فوري)، مهام وقوائم، حقيبة ومتاجر، حفظ تلقائي. استخدم أصول local_assets للسبرايت أو ولدها procedural بأنماط بكسل آرت. واجهة عربية RTL.'
   };
-  var BUILD_NAMES = { three: 'three.js', godot: 'Godot', mixed: 'مزيج المحركين', off: '' };
+  var BUILD_NAMES = { three: 'three.js', godot: 'Godot', mixed: 'مزيج المحركين', rpg2d: '2D RPG', off: '' };
   function buildPanel(open) {
     var p = document.getElementById('tools-build');
     if (p) p.classList.toggle('on', open);
@@ -278,7 +284,7 @@ const INJECTED_SNIPPET = `
     chip.classList.toggle('on', active);
     try { localStorage.setItem('dsh-build-mode', mode); } catch (err) { /* لا تخزين */ }
     chip.title = active ? ('وضع البناء الحالي: ' + BUILD_NAMES[mode] + ' — انقر للتغيير') : 'وضع البناء — اختر المحرك';
-    sendToComposer(text);
+    sendToComposer(active ? text + ' ' + ${JSON.stringify(BUILD_PROTOCOL_TEXT)} : text);
     assetsNote(active ? ('وضع البناء: ' + BUILD_NAMES[mode] + ' — أُرسل التوجيه للوكيل') : 'أُلغي وضع البناء');
     buildPanel(false);
   }
@@ -289,7 +295,7 @@ const INJECTED_SNIPPET = `
     chip.addEventListener('click', function () { buildPanel(true); });
     var saved = null;
     try { saved = localStorage.getItem('dsh-build-mode'); } catch (err) { /* لا تخزين */ }
-    if (saved === 'three' || saved === 'godot' || saved === 'mixed') {
+    if (saved === 'three' || saved === 'godot' || saved === 'mixed' || saved === 'rpg2d') {
       chip.classList.add('on');
       chip.title = 'وضع البناء الحالي: ' + BUILD_NAMES[saved] + ' — انقر للتغيير';
     }

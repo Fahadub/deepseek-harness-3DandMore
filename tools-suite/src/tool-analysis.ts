@@ -1,6 +1,6 @@
 /**
  * Tools suite — project analysis & quality tools.
- * Ports from the original IDE's main engine:
+ * Ports from TOOLS IDE's main engine:
  *  - 3-stage verification (files → build → running server HTTP check)
  *  - security scan (secret leakage)
  *  - project cleanup (temp/test artifacts)
@@ -383,7 +383,7 @@ export function apply(ctx: Context): void {
     name: 'stack_commands',
     description:
       'Detect the workspace stack from manifests and return the correct install/build/run/test commands ' +
-      '(essence of the original IDE\'s 170+ command classifier, deterministic subset).',
+      '(essence of TOOLS IDE\'s 170+ command classifier, deterministic subset).',
     parameters: {},
     output: {
       schema: { type: 'json' },

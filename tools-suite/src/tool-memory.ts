@@ -1,6 +1,6 @@
 /**
  * Tools suite — permanent project memory.
- * Ports the original IDE's [MEMORY] key=value feature: cross-session key/value
+ * Ports TOOLS IDE's [MEMORY] key=value feature: cross-session key/value
  * storage scoped to each workspace, exposed as a model-facing tool and a
  * /memory slash command. Stored under <workspace>/.dsh-tools/memory.json.
  */
