@@ -585,6 +585,49 @@ export function apply(ctx: Context): void {
         sendJson(res, 200, { ok: true, folders: await registeredFolders() })
         return
       }
+      // ---- تصوير فيديو اللعبة (Godot Movie Writer) ----
+      if (p === '/tools/api/record' && req.method === 'POST') {
+        const body = await readJsonBody(req)
+        const wsPath = String(body.ws ?? '')
+        const found = workspacesOf(ctx).find(w => w.path === wsPath || w.id === wsPath)
+        if (found === undefined) throw new Error(`workspace not registered: ${wsPath}`)
+        const exe = path.resolve('tools-suite/godot/Godot.exe')
+        await fs.access(exe).catch(() => { throw new Error('Godot not installed') })
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+        const videoPath = path.join(os.homedir(), 'Desktop', `game-${stamp}.avi`)
+        const fps = Number(body.fps) || 30
+        // أوقف أي تسجيل سابق
+        if (globalThis.__recProcess) { try { globalThis.__recProcess.kill() } catch { } }
+        const ch = spawn(exe, ['--path', found.path, '--write-movie', videoPath, '--fixed-fps', String(fps)],
+          { detached: false, stdio: 'ignore', windowsHide: false })
+        globalThis.__recProcess = ch
+        globalThis.__recVideo = videoPath
+        ch.on('close', () => {
+          globalThis.__recProcess = null
+          // افتح المجلد عند انتهاء التسجيل (إغلاق اللعبة)
+          spawn('explorer.exe', ['/select,', videoPath], { detached: true, windowsHide: true })
+        })
+        // افتح مجلد سطح المكتب فوراً ليرى المستخدم أين سيُحفظ
+        sendJson(res, 200, { ok: true, video: videoPath, fps, message: 'Recording started — close the game window to stop' })
+        return
+      }
+      if (p === '/tools/api/record/status' && req.method === 'GET') {
+        sendJson(res, 200, {
+          recording: globalThis.__recProcess !== null && globalThis.__recProcess !== undefined,
+          video: globalThis.__recVideo ?? null,
+        })
+        return
+      }
+      if (p === '/tools/api/record/stop' && req.method === 'POST') {
+        if (globalThis.__recProcess) {
+          globalThis.__recProcess.kill()
+          globalThis.__recProcess = null
+        }
+        const vp = globalThis.__recVideo
+        if (vp) spawn('explorer.exe', ['/select,', vp], { detached: true, windowsHide: true })
+        sendJson(res, 200, { ok: true, video: vp })
+        return
+      }
       if (p === '/tools/api/godot/open' && req.method === 'POST') {
         const body = await readJsonBody(req)
         const target = String(body.ws ?? body.path ?? '')

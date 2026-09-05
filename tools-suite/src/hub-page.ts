@@ -588,6 +588,7 @@ button,span,div,p{unicode-bidi:plaintext}
       <div class="row">
         <span class="f" style="margin:0;min-width:70px">Godot</span>
         <span class="note" id="godotState">جارٍ الفحص…</span>
+        <button class="btn" id="recordGameBtn" title="يسجل فيديو للعبة Godot بجودة 30fps — يفتح المجلد عند الانتهاء" style="border-color:var(--dsw-alias-state-success-primary,#2ea043);color:var(--dsw-alias-state-success-primary,#2ea043)">🎬 سجل فيديو</button>
         <button class="btn" id="godotDl" title="ينزّل Godot 4.7.2 الرسمي (~180MB) إلى tools-suite/godot — لمرة واحدة">تنزيل الآن</button>
       </div>
       <p class="hint" style="margin:0">محركان اختياريان يعملان رأسياً بدون أي إضافات: Blender يعالج المجسمات (اتجاهات، مقاسات، تصادم) بأداة asset_pipeline، وGodot يستورد الناتج ويشغّل اللعبة. التنزيل يحدث مرة واحدة فقط ويبقى بعد التحديثات.</p>
@@ -1870,6 +1871,16 @@ q('#gCommit').addEventListener('click', function () {
   });
 });
 
+
+/* ---- تصوير فيديو اللعبة ---- */
+function recordGame() {
+  var sel = q('#wsSel');
+  if (!sel || !sel.value) { toast('اختر مساحة عمل أولاً', true); return; }
+  api('/tools/api/record', { method: 'POST', body: { ws: sel.value, fps: 30 } }, function (e, x) {
+    if (e || x.s !== 200) { toast('تعذر بدء التصوير' + (x.j && x.j.error ? ' — ' + x.j.error : ''), true); return; }
+    toast('🎬 بدأ التصوير — ' + (x.j.video || '') + ' — أغلق نافذة اللعبة لإيقافه');
+  });
+}
 /* ---- مجلدات الأصول الجاهزة ---- */
 function fmtMB(b) { return b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : (b / 1024).toFixed(0) + ' KB' }
 function loadAssets() {
